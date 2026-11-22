@@ -92,19 +92,19 @@ Always write your best reading of the whole piece. For a spot you are unsure abo
 If the picture does not contain sheet music at all, answer only with the word NOT_MUSIC.
 
 ## Example of the expected output
-Title: Eksempelsang. Treble clef, 1 flat (F major), 3/4, pickup of one quarter, 2 systems, 8 bars.
+Title: Eksempelsang. Treble clef, 1 flat (F major), 3/4, pickup of one quarter, 2 systems, 8 bars after the pickup.
 \`\`\`abc
 X:1
 T:Eksempelsang
 M:3/4
 L:1/8
 K:F
-C2 |"F"F2 A2 c2 |"C7"B2 G2 E2 |"F"F3 G A2 |"C"G4
-w:Der stod en lind i den grøn-ne skov, så
-C2 |"F"F2 A2 c2 |"Bb"d2 c2 B2 |"C7"A2 G2 E2 |"F"F4 |]
-w:fag-ger og fin, så fag-ger og fin.
+C2 |"F"F2 A2 c2 |"C7"B2 G2 E2 |"F"F4 G2 |"C"G4 C2 |
+w:Der stod en lind i den grøn-ne_ skov, så
+"F"F2 A2 c2 |"Bb"d2 c2 B2 |"C7"A2 G2 E2 |"F"F4 |]
+w:fag-ger og fin, og så fag-ger og fin.
 \`\`\`
-(The pickup is one quarter note; the last bar has two quarters, so pickup + last bar = one full 3/4 bar.)`;
+(The pickup is one quarter note and the last bar has two quarters, so together they make one full 3/4 bar. "ne_" holds the syllable over the next note.)`;
 
 /** Message asking for a corrected transcription after validation failed. */
 export function omrRetryMessage(errors) {
@@ -118,7 +118,7 @@ export const EDIT_SYSTEM = `You help people with songs written in ABC notation (
 You receive a tune in ABC and an instruction or question. Examples: "gør melodien enklere", "fjern akkorderne", "kun første vers", "sæt den en kvint ned", "hvad betyder taktarten?".
 
 Rules:
-- Answer with a short explanation IN DANISH (1-4 sentences, plain language for a amateur musician), then the COMPLETE tune in ONE fenced code block that starts with \`\`\`abc and ends with \`\`\`.
+- Answer with a short explanation IN DANISH (1-4 sentences, plain language for an amateur musician), then the COMPLETE tune in ONE fenced code block that starts with \`\`\`abc and ends with \`\`\`.
 - Keep everything the user did not ask to change: header fields (X:, T:, M:, L:, Q:, K:), chord symbols, repeats, the lyrics (w: lines) and their alignment to the notes.
 - Every bar must still add up to the time signature (a pickup bar and the last bar may be shorter). Keep the lyrics aligned with one syllable per note; if you remove or merge notes, adjust the w: lines so they still fit.
 - When changing the key (transposing), change K: and every note and chord symbol consistently.
