@@ -25,9 +25,8 @@
       desc: "Vælg selv, hvor mange halvtoner noderne flyttes." }
   ];
   var ZOOMS = [0.6, 0.7, 0.8, 0.9, 1, 1.12, 1.25, 1.4, 1.6, 1.8, 2.1];
-  var LIB_KEY = "noder.songs.v1";
   var PREF_KEY = "noder.prefs.v1";
-  var THUMB_MAX_CHARS = 30000;      // ≈ 30 KB dataURL
+  var SAVE_DELAY_MS = 1500;
   var UPLOAD_MAX_DIM = 2400;
   var READ_TIMEOUT_MS = 4 * 60 * 1000;
   var EDIT_TIMEOUT_MS = 3 * 60 * 1000;
@@ -74,18 +73,29 @@
     for (var i = 0; i < INSTRUMENTS.length; i++) if (INSTRUMENTS[i].id === id) return INSTRUMENTS[i];
     return INSTRUMENTS[0];
   }
-  function newId() { return "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function songUrl(id, file) { return "/api/songs/" + encodeURIComponent(id) + (file ? "/" + file : ""); }
 
   // ------------------------------------------------------------------
   // State
   // ------------------------------------------------------------------
-  var prefs = Object.assign({ instrument: "altsax", custom: 0, chords: true, lyrics: true, zoom: null, lastSongId: null },
+  // Per-viewer preferences only (the songs themselves live on the server).
+  var prefs = Object.assign({ instrument: "altsax", custom: 0, chords: true, lyrics: true, zoom: null, perSong: {} },
     lsGet(PREF_KEY, {}));
-  function savePrefs() { lsSet(PREF_KEY, prefs); }
+  if (!prefs.perSong || typeof prefs.perSong !== "object") prefs.perSong = {};
+  delete prefs.lastSongId;
+  function savePrefs() {
+    // keep the per-song map bounded
+    var ids = Object.keys(prefs.perSong);
+    if (ids.length > 300) ids.sort(function (a, b) { return (prefs.perSong[a].t || 0) - (prefs.perSong[b].t || 0); })
+      .slice(0, ids.length - 300).forEach(function (id) { delete prefs.perSong[id]; });
+    lsSet(PREF_KEY, prefs);
+  }
 
   var S = {
-    song: null,          // { id, title, abc, thumb, instrument, octave, custom, warnings, savedAt }
-    photoUrl: null,      // full-size object URL for this session (else thumb)
+    song: null,          // server song {id, title, abc, warnings, has_photo, …} + viewer settings {instrument, octave, custom}
+    photoUrl: null,      // object URL of the photo just taken (this session only)
+    lib: [],             // GET /api/songs
+    libLoaded: false,
     undo: [],
     visualObj: null,
     lastFile: null,
@@ -133,17 +143,6 @@
     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0, c.width, c.height);
     return c;
-  }
-  function makeThumb(img) {
-    var dims = [320, 260, 200, 160, 120], qs = [0.72, 0.6, 0.5];
-    for (var i = 0; i < dims.length; i++) {
-      var c = drawScaled(img, dims[i]);
-      for (var j = 0; j < qs.length; j++) {
-        var d = c.toDataURL("image/jpeg", qs[j]);
-        if (d.length <= THUMB_MAX_CHARS) return d;
-      }
-    }
-    return null;
   }
   function makeUploadBlob(file, img) {
     var big = Math.max(img.naturalWidth, img.naturalHeight) > UPLOAD_MAX_DIM;
@@ -193,11 +192,10 @@
     stopPlayback();
     startProgress(null);
 
-    var photoUrl = null, thumb = null;
+    var photoUrl = null;
     loadImage(file).then(function (r) {
       photoUrl = r.url;
       $("progress-thumb").src = r.url;
-      try { thumb = makeThumb(r.img); } catch (e) { thumb = null; }
       return makeUploadBlob(file, r.img);
     }, function () {
       return file; // could not decode locally (e.g. HEIC on some browsers) – send as-is
@@ -216,21 +214,20 @@
       if (!data || typeof data.abc !== "string" || !data.abc.trim()) {
         throw new Error("Der kom ingen noder tilbage. Prøv et skarpere billede, hvor hele melodien er med.");
       }
+      var now = new Date().toISOString();
       var song = {
-        id: newId(),
+        id: data.id || null, // the server saves the song (with the photo) automatically
         title: (data.title || titleFromAbc(data.abc) || "Uden titel").trim(),
         abc: data.abc,
-        thumb: thumb,
-        instrument: prefs.instrument || "altsax",
-        octave: 0,
-        custom: prefs.custom || 0,
         warnings: Array.isArray(data.warnings) ? data.warnings : [],
-        savedAt: Date.now()
+        has_photo: !!data.id,
+        created_at: now, updated_at: now
       };
       if (S.photoUrl && S.photoUrl !== photoUrl) { try { URL.revokeObjectURL(S.photoUrl); } catch (e) { /* */ } }
       S.photoUrl = photoUrl;
-      if (!saveSong(song)) toast("Sangen kunne ikke gemmes på enheden (der er ikke plads), men du kan stadig bruge den nu.", 5000);
-      openSong(song, { keepPhoto: true });
+      openSong(song, { keepPhoto: true, route: "push" });
+      if (!song.id) setSaveStatus("error", "Sangen blev ikke gemt i sangbogen.");
+      loadLibrary();
     }).catch(function (err) {
       if (err && (err.name === "AbortError" || err === "cancel")) {
         if (S.cancelled) { S.cancelled = false; stopProgress(); show(S.song ? "song" : "upload"); return; }
@@ -365,7 +362,7 @@
     var box = $("instruments");
     box.innerHTML = "";
     INSTRUMENTS.forEach(function (ins) {
-      var nameEl = el("span", { "class": "instr-name" }, [ins.name]);
+      var nameEl = el("span", { "class": "instr-name" }, [el("span", { "class": "instr-label", text: ins.name })]);
       if (ins.badge) nameEl.appendChild(el("span", { "class": "badge", text: ins.badge }));
       var b = el("button", {
         type: "button", role: "radio", "class": "instr" + (ins.featured ? " featured" : ""),
@@ -381,6 +378,7 @@
       b.setAttribute("aria-checked", b.getAttribute("data-id") === id ? "true" : "false");
       b.tabIndex = b.getAttribute("data-id") === id ? 0 : -1;
     });
+    $("instr-current-desc").textContent = instrumentById(id).desc;
     $("custom-steps").hidden = id !== "egen";
     var c = S.song ? (S.song.custom || 0) : 0;
     $("custom-value").textContent = (c > 0 ? "+" : "") + c;
@@ -391,25 +389,33 @@
     $("oct-down").disabled = o <= -2;
     $("oct-up").disabled = o >= 2;
   }
-  function setPickerOpen(open) {
-    $("instruments").classList.toggle("collapsed", !open);
-    $("instr-more").setAttribute("aria-expanded", String(open));
-    $("instr-more").textContent = open ? "Skjul listen" : "Skift instrument";
-  }
-  $("instr-more").addEventListener("click", function () {
-    setPickerOpen($("instruments").classList.contains("collapsed"));
-  });
   function chooseInstrument(id) {
     if (!S.song) return;
-    if (window.innerWidth < 700) setPickerOpen(false);
     S.song.instrument = id;
-    prefs.instrument = id; savePrefs();
+    prefs.instrument = id;
     afterTransposeChange();
+    // keep the chosen chip visible in the horizontal row (phones)
+    var b = $("instruments").querySelector('[data-id="' + id + '"]');
+    if (b && b.scrollIntoView && $("instruments").scrollWidth > $("instruments").clientWidth) {
+      try { b.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); } catch (e) { /* */ }
+    }
+  }
+  // Instrument/octave are per viewer (one brother plays piano, the other sax), stored locally per song.
+  function viewerSettings(id) {
+    var v = (id && prefs.perSong[id]) || {};
+    return {
+      instrument: v.instrument || prefs.instrument || "altsax",
+      octave: v.octave || 0,
+      custom: v.custom !== undefined ? v.custom : (prefs.custom || 0)
+    };
   }
   function afterTransposeChange() {
     syncInstrumentUi();
     render();
-    saveCurrentSoon();
+    if (S.song && S.song.id) {
+      prefs.perSong[S.song.id] = { instrument: S.song.instrument, octave: S.song.octave || 0, custom: S.song.custom || 0, t: Date.now() };
+    }
+    savePrefs();
   }
   // Keyboard arrows within the radiogroup
   $("instruments").addEventListener("keydown", function (e) {
@@ -421,8 +427,8 @@
     var n = btns[(i + keys[e.key] + btns.length) % btns.length];
     n.focus(); n.click();
   });
-  $("custom-minus").addEventListener("click", function () { if (!S.song) return; S.song.custom = clamp((S.song.custom || 0) - 1, -12, 12); prefs.custom = S.song.custom; savePrefs(); afterTransposeChange(); });
-  $("custom-plus").addEventListener("click", function () { if (!S.song) return; S.song.custom = clamp((S.song.custom || 0) + 1, -12, 12); prefs.custom = S.song.custom; savePrefs(); afterTransposeChange(); });
+  $("custom-minus").addEventListener("click", function () { if (!S.song) return; S.song.custom = clamp((S.song.custom || 0) - 1, -12, 12); prefs.custom = S.song.custom; afterTransposeChange(); });
+  $("custom-plus").addEventListener("click", function () { if (!S.song) return; S.song.custom = clamp((S.song.custom || 0) + 1, -12, 12); prefs.custom = S.song.custom; afterTransposeChange(); });
   $("oct-down").addEventListener("click", function () { if (!S.song) return; S.song.octave = clamp((S.song.octave || 0) - 1, -2, 2); afterTransposeChange(); });
   $("oct-up").addEventListener("click", function () { if (!S.song) return; S.song.octave = clamp((S.song.octave || 0) + 1, -2, 2); afterTransposeChange(); });
 
@@ -736,12 +742,14 @@
     $("undo").disabled = false;
   }
   function setAbc(abc, opts) {
+    opts = opts || {};
     S.song.abc = abc;
-    if (!opts || !opts.fromTextarea) $("abc-text").value = abc;
+    if (!opts.fromTextarea) $("abc-text").value = abc;
+    var fields = { abc: abc };
     var t = titleFromAbc(abc);
-    if (t && t !== S.song.title) { S.song.title = t; $("song-title").value = t; }
+    if (t && t !== S.song.title) { S.song.title = t; $("song-title").value = t; fields.title = t; }
     render();
-    saveCurrentSoon();
+    queueSave(fields, !opts.fromTextarea);
   }
   var renderFromTextarea = debounce(function () {
     if (!S.song) return;
@@ -795,7 +803,7 @@
       if (changed) {
         pushUndo(before);
         editBurst = false;
-        setAbc(data.abc);
+        setAbc(data.abc); // saved to the server right away
         res.appendChild(el("button", { type: "button", "class": "btn btn-small", onclick: function () { undo(); res.hidden = true; } },
           [el("span", { text: "Fortryd ændringen" })]));
         $("ai-input").value = "";
@@ -818,9 +826,10 @@
     var t = this.value.trim() || "Uden titel";
     S.song.title = t;
     var abc = setAbcTitle(S.song.abc, t);
-    if (abc !== S.song.abc) { S.song.abc = abc; $("abc-text").value = abc; render(); }
-    saveCurrentSoon();
-    renderLibrary();
+    var fields = { title: t };
+    if (abc !== S.song.abc) { S.song.abc = abc; $("abc-text").value = abc; render(); fields.abc = abc; }
+    queueSave(fields, true);
+    document.title = t + " – Noder";
   });
   $("song-title").addEventListener("keydown", function (e) { if (e.key === "Enter") this.blur(); });
 
@@ -854,85 +863,163 @@
   });
 
   // ------------------------------------------------------------------
-  // Library (localStorage)
+  // Saving to the shared song library on the server
   // ------------------------------------------------------------------
-  function loadLib() { var l = lsGet(LIB_KEY, []); return Array.isArray(l) ? l : []; }
-  function saveSong(song) {
-    var list = loadLib().filter(function (s) { return s && s.id !== song.id; });
-    var rec = {
-      id: song.id, title: song.title, abc: song.abc, thumb: song.thumb || null,
-      instrument: song.instrument, octave: song.octave || 0, custom: song.custom || 0,
-      warnings: song.warnings || [], savedAt: Date.now()
-    };
-    list.unshift(rec);
-    var ok = lsSet(LIB_KEY, list);
-    // Out of space: drop thumbnails of the oldest songs and try again.
-    for (var i = list.length - 1; !ok && i > 0; i--) {
-      if (list[i].thumb) { list[i].thumb = null; ok = lsSet(LIB_KEY, list); }
-    }
-    renderLibrary();
-    return ok;
+  var pendingSave = null, pendingSongId = null, saveTimer = null, saveInFlight = null;
+  function setSaveStatus(state, text) {
+    var n = $("save-status");
+    n.className = "save-status " + state;
+    n.textContent = text || ({ saving: "Gemmer…", saved: "Gemt i sangbogen", error: "Kunne ikke gemme", dirty: "Ikke gemt endnu…" })[state] || "";
   }
-  var saveCurrentSoon = debounce(function () {
-    if (S.song && !S.song.deleted) saveSong(S.song);
-  }, 600);
-  function deleteSong(id) {
-    var list = loadLib().filter(function (s) { return s.id !== id; });
-    lsSet(LIB_KEY, list);
-    if (S.song && S.song.id === id) { S.song.deleted = true; closeSong(); }
-    renderLibrary();
+  // Merge fields into the pending PUT; send after SAVE_DELAY_MS (or right away when `now`).
+  function queueSave(fields, now) {
+    if (!S.song || !S.song.id) return;
+    if (pendingSongId && pendingSongId !== S.song.id) flushSave();
+    pendingSongId = S.song.id;
+    pendingSave = Object.assign(pendingSave || {}, fields);
+    setSaveStatus("dirty");
+    clearTimeout(saveTimer);
+    if (now) flushSave();
+    else saveTimer = setTimeout(flushSave, SAVE_DELAY_MS);
+  }
+  function flushSave(opts) {
+    clearTimeout(saveTimer);
+    if (!pendingSave || !pendingSongId) return Promise.resolve();
+    var id = pendingSongId, body = pendingSave;
+    pendingSave = null; pendingSongId = null;
+    if (opts && opts.keepalive) {
+      try { fetch(songUrl(id), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true }); } catch (e) { /* */ }
+      return Promise.resolve();
+    }
+    if (S.song && S.song.id === id) setSaveStatus("saving");
+    var p = (saveInFlight || Promise.resolve()).then(function () {
+      return fetch(songUrl(id), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(readJson);
+    }).then(function (song) {
+      if (S.song && S.song.id === id) {
+        if (song && song.updated_at) S.song.updated_at = song.updated_at;
+        if (!pendingSave) setSaveStatus("saved");
+      }
+      updateLibEntry(song || { id: id, title: body.title });
+    }).catch(function (err) {
+      // put it back so the next change (or a retry) sends it again
+      if (!pendingSave || pendingSongId === id) {
+        pendingSongId = id;
+        pendingSave = Object.assign({}, body, pendingSave || {});
+      }
+      if (S.song && S.song.id === id) setSaveStatus("error", "Kunne ikke gemme – prøver igen…");
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(flushSave, 8000);
+      console.warn("Gem fejlede", err);
+    });
+    saveInFlight = p;
+    return p;
+  }
+  window.addEventListener("pagehide", function () { flushSave({ keepalive: true }); });
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flushSave({ keepalive: true }); });
+
+  // ------------------------------------------------------------------
+  // Sangbog: the shared library (everyone sees every song)
+  // ------------------------------------------------------------------
+  function loadLibrary() {
+    return fetch("/api/songs").then(readJson).then(function (list) {
+      S.lib = Array.isArray(list) ? list : [];
+      S.libLoaded = true;
+      renderLibrary();
+    }).catch(function () {
+      S.libLoaded = true;
+      $("lib-empty").hidden = false;
+      $("lib-empty").textContent = "Sangbogen kunne ikke hentes lige nu. Prøv at genindlæse siden.";
+    });
+  }
+  function updateLibEntry(song) {
+    if (!song || !song.id) return;
+    var found = false;
+    S.lib.forEach(function (x) { if (x.id === song.id) { found = true; if (song.title) x.title = song.title; if (song.updated_at) x.updated_at = song.updated_at; } });
+    if (!found) loadLibrary(); else renderLibrary();
+  }
+  function deleteSong(id, title) {
+    if (!window.confirm("Vil du slette «" + (title || "Uden titel") + "» fra sangbogen?\nDen forsvinder for alle, der bruger siden.")) return;
+    fetch(songUrl(id), { method: "DELETE" }).then(readJson).then(function () {
+      if (pendingSongId === id) { pendingSave = null; pendingSongId = null; clearTimeout(saveTimer); }
+      delete prefs.perSong[id]; savePrefs();
+      S.lib = S.lib.filter(function (x) { return x.id !== id; });
+      if (S.song && S.song.id === id) goHome();
+      renderLibrary();
+      toast("Sangen er slettet.");
+    }).catch(function (err) {
+      toast((err && err.message) || "Sangen kunne ikke slettes.", 5000);
+    });
   }
   function fmtDate(ts) {
     try { return new Date(ts).toLocaleDateString("da-DK", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; }
   }
+  function normalize(t) { return String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
   function renderLibrary() {
-    var list = loadLib(), ul = $("lib-list");
+    var ul = $("lib-list"), q = normalize($("lib-search").value.trim());
+    var list = S.lib.filter(function (s) { return !q || normalize(s.title).indexOf(q) >= 0; });
     ul.innerHTML = "";
-    $("lib-empty").hidden = list.length > 0;
+    $("lib-search-row").hidden = S.lib.length < 4;
+    var empty = $("lib-empty");
+    if (!S.libLoaded) { empty.hidden = false; empty.textContent = "Henter sangbogen…"; }
+    else if (!S.lib.length) { empty.hidden = false; empty.textContent = "Sangbogen er tom endnu. Tag et billede af noderne, så kommer sangen her – og alle, der bruger siden, kan se den."; }
+    else if (!list.length) { empty.hidden = false; empty.textContent = "Ingen sange matcher «" + $("lib-search").value.trim() + "»."; }
+    else empty.hidden = true;
+    $("lib-count").textContent = S.lib.length ? "(" + S.lib.length + ")" : "";
     list.forEach(function (s) {
-      var ins = instrumentById(s.instrument);
-      var thumb = s.thumb ? el("img", { "class": "lib-thumb", src: s.thumb, alt: "" }) : el("span", { "class": "lib-thumb", "aria-hidden": "true" });
-      var open = el("button", { type: "button", "class": "lib-open", onclick: function () { openSong(s); window.scrollTo({ top: 0, behavior: "smooth" }); } }, [
+      var v = prefs.perSong[s.id];
+      var thumb = s.has_photo
+        ? el("img", { "class": "lib-thumb", src: songUrl(s.id, "thumb.jpg"), alt: "", loading: "lazy", width: "56", height: "56" })
+        : el("span", { "class": "lib-thumb lib-thumb-empty", "aria-hidden": "true" }, ["♪"]);
+      var sub = fmtDate(s.created_at) + (v && v.instrument ? " · du spillede: " + instrumentById(v.instrument).name : "");
+      var open = el("a", { "class": "lib-open", href: "#/sang/" + encodeURIComponent(s.id) }, [
         thumb,
         el("span", { "class": "lib-meta" }, [
           el("span", { "class": "lib-title", text: s.title || "Uden titel" }),
-          el("span", { "class": "lib-sub", text: ins.name + " · " + fmtDate(s.savedAt) })
+          el("span", { "class": "lib-sub", text: sub })
         ])
       ]);
       var del = el("button", {
         type: "button", "class": "btn btn-icon lib-del", "aria-label": "Slet " + (s.title || "sangen"), title: "Slet",
-        onclick: function () { if (window.confirm("Vil du slette «" + (s.title || "Uden titel") + "»?")) deleteSong(s.id); }
+        onclick: function () { deleteSong(s.id, s.title); }
       }, []);
-      del.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>';
+      del.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg>';
       ul.appendChild(el("li", { "class": "lib-item" + (S.song && S.song.id === s.id ? " current" : "") }, [open, del]));
     });
   }
+  $("lib-search").addEventListener("input", debounce(renderLibrary, 120));
 
   // ------------------------------------------------------------------
-  // Open / close song
+  // Open / close song + routing (#/sang/<id>)
   // ------------------------------------------------------------------
   function openSong(song, opts) {
+    opts = opts || {};
+    flushSave();
     stopPlayback();
-    S.song = Object.assign({ octave: 0, custom: 0, warnings: [] }, song);
+    S.song = Object.assign({ warnings: [] }, song, viewerSettings(song.id));
     S.undo = []; editBurst = false;
     $("undo").disabled = true;
-    if (!opts || !opts.keepPhoto) {
+    if (!opts.keepPhoto) {
       if (S.photoUrl) { try { URL.revokeObjectURL(S.photoUrl); } catch (e) { /* */ } }
       S.photoUrl = null;
     }
     $("song-title").value = S.song.title || "";
     $("abc-text").value = S.song.abc || "";
     $("ai-result").hidden = true;
-    var src = S.photoUrl || S.song.thumb;
+    var src = S.photoUrl || (S.song.id && S.song.has_photo ? songUrl(S.song.id, "photo.jpg") : null);
+    var full = S.song.id && S.song.has_photo ? songUrl(S.song.id, "photo.jpg") : src;
     $("photo-box").hidden = !src;
-    if (src) { $("photo").src = src; $("photo-link").href = src; }
+    if (src) { $("photo").src = src; $("photo-link").href = full; }
     var w = S.song.warnings || [];
     var wb = $("server-warnings");
     if (w.length) {
       wb.innerHTML = "<strong>Bemærk fra nodelæseren:</strong><ul>" + w.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
       wb.hidden = false;
     } else wb.hidden = true;
-    prefs.lastSongId = S.song.id; savePrefs();
+    if (S.song.id) setSaveStatus("saved"); else setSaveStatus("", "");
+    if (S.song.id && opts.route) {
+      var h = "#/sang/" + encodeURIComponent(S.song.id);
+      if (location.hash !== h) history[opts.route === "replace" ? "replaceState" : "pushState"](null, "", h);
+    }
     show("song");
     syncInstrumentUi();
     syncToggles();
@@ -941,20 +1028,56 @@
     document.title = (S.song.title || "Noder") + " – Noder";
   }
   function closeSong() {
+    flushSave();
     stopPlayback();
     exitStand();
     S.song = null; S.visualObj = null;
-    prefs.lastSongId = null; savePrefs();
     $("paper").innerHTML = "";
     show("upload");
     document.title = "Noder – fra sangbogen til saxofonen";
     renderLibrary();
   }
+  function goHome() {
+    if (location.hash) history.pushState(null, "", location.pathname + location.search);
+    closeSong();
+  }
+  var routeSeq = 0;
+  function route() {
+    var m = /^#\/sang\/([^/?#]+)/.exec(location.hash || "");
+    if (!m) {
+      if (S.song && !S.reading) closeSong();
+      else if (!S.reading && $("progress").hidden) show("upload");
+      return;
+    }
+    var id = decodeURIComponent(m[1]);
+    if (S.song && S.song.id === id) return;
+    var seq = ++routeSeq;
+    $("paper").innerHTML = "";
+    fetch(songUrl(id)).then(readJson).then(function (song) {
+      if (seq !== routeSeq) return;
+      openSong(song);
+      window.scrollTo({ top: 0 });
+    }).catch(function (err) {
+      if (seq !== routeSeq) return;
+      history.replaceState(null, "", location.pathname + location.search);
+      showError((err && err.message) || "Sangen kunne ikke hentes.", false);
+    });
+  }
+  window.addEventListener("popstate", route);
+  window.addEventListener("hashchange", route);
   document.querySelector(".brand").addEventListener("click", function (e) {
     e.preventDefault();
     if (S.reading) return;
-    closeSong();
+    goHome();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  // In-page links (header) must not touch the #/sang route
+  Array.prototype.forEach.call(document.querySelectorAll("[data-scroll]"), function (a) {
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      var t = $(a.getAttribute("data-scroll"));
+      if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   });
 
   // Photo link: object URLs / data URLs can't always be opened in a new tab – open an overlay-free new window instead.
@@ -972,15 +1095,12 @@
   // ------------------------------------------------------------------
   buildInstrumentPicker();
   syncToggles();
-  renderLibrary();
   if (!window.ABCJS) {
     showError("Nodeprogrammet (abcjs) kunne ikke indlæses. Genindlæs siden.", false);
-  } else if (prefs.lastSongId) {
-    var last = loadLib().filter(function (s) { return s.id === prefs.lastSongId; })[0];
-    if (last) openSong(last); else show("upload");
   } else {
-    show("upload");
+    route();
   }
+  loadLibrary();
 
   // Expose a tiny API for debugging/tests
   window.Noder = {
