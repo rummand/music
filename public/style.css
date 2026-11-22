@@ -230,6 +230,23 @@ main { max-width: 1280px; margin: 0 auto; padding: 0 16px 32px; }
   .instr-current-desc { font-size: .85rem; margin-top: 4px; }
 }
 @media (max-width: 600px) {
+  /* Phones: notes right after the key line; the player becomes a bar fixed at the bottom. */
+  .song-main { display: flex; flex-direction: column; }
+  .song-main > * { order: 4; }
+  .song-main > .key-info { order: 0; }
+  .song-main > .sheet { order: 1; }
+  .song-main > #abc-errors { order: 2; }
+  .song-main > #toolbar { order: 3; }
+  #song { padding-bottom: 76px; }
+  .player {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 8px; flex-wrap: nowrap;
+    background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(0,0,0,.08);
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  }
+  .btn-play { min-width: 0; padding: 0 16px; }
+  .tempo { min-width: 0; flex: 1 1 auto; }
+  .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .progressbar { margin-top: 0; }
   .audio-note { display: none; }
   .toolbar { padding: 12px; }
   .progressbar { margin: 8px 0; }
