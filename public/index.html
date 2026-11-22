@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Noder – fra sangbogen til saxofonen</title>
+  <meta name="description" content="Tag et billede af en side i sangbogen og få noderne transponeret til altsax og andre instrumenter.">
+  <meta name="theme-color" content="#f7f1e6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1d1a17" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-camera" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></symbol>
+    <symbol id="i-restart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-print" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M7 9V3h10v6M7 17H4v-7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v7h-3M7 14h10v7H7z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M5 12h14"/></symbol>
+  </svg>
+
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Noder – forside">
+      <img src="favicon.svg" alt="" width="36" height="36">
+      <span class="brand-text"><span class="brand-name">Noder</span><span class="brand-tag">fra sangbogen til saxofonen</span></span>
+    </a>
+    <nav class="header-nav">
+      <a href="#bibliotek">Mine sange</a>
+      <a href="#hjaelp">Sådan virker det</a>
+    </nav>
+  </header>
+
+  <div id="mock-notice" class="notice notice-mock" hidden>
+    <strong>Demo-tilstand:</strong> Serveren læser ikke rigtigt billedet lige nu – du får altid den samme eksempel-sang.
+  </div>
+
+  <main id="main">
+    <!-- ============ UPLOAD ============ -->
+    <section id="upload" class="card upload" aria-labelledby="upload-title">
+      <div id="dropzone" class="dropzone">
+        <h1 id="upload-title" class="upload-title">Tag et billede af noderne</h1>
+        <p class="upload-lead">Fotografér én side fra sangbogen. Så læser vi noderne og viser dem – også til altsax.</p>
+        <label class="btn btn-primary btn-huge" for="file-input">
+          <svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg>
+          <span>Tag billede / vælg billede</span>
+        </label>
+        <input id="file-input" class="visually-hidden" type="file" accept="image/*">
+        <p class="upload-hint only-desktop">…eller træk et billede herind.</p>
+        <ul class="tips">
+          <li>Hold telefonen lige over siden.</li>
+          <li>Godt lys, ingen skygger.</li>
+          <li>Få hele melodien med – gerne lidt kant rundt om.</li>
+        </ul>
+      </div>
+      <div id="drop-overlay" class="drop-overlay" hidden>Slip billedet her</div>
+    </section>
+
+    <!-- ============ PROGRESS ============ -->
+    <section id="progress" class="card progress" hidden aria-live="polite">
+      <img id="progress-thumb" class="progress-thumb" alt="Dit billede">
+      <div class="progress-body">
+        <div class="spinner" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h2>Læser noderne…</h2>
+        <p>Det kan tage op til et par minutter. Du kan roligt lade siden stå.</p>
+        <p class="progress-time"><span id="progress-elapsed">0</span> sekunder</p>
+        <p id="progress-stage" class="muted"></p>
+        <button id="progress-cancel" class="btn btn-ghost" type="button">Annuller</button>
+      </div>
+    </section>
+
+    <!-- ============ ERROR ============ -->
+    <section id="error" class="card error" hidden role="alert">
+      <h2>Det gik ikke helt</h2>
+      <p id="error-text"></p>
+      <div class="row">
+        <label class="btn btn-primary" for="file-input">Prøv et nyt billede</label>
+        <button id="error-retry" class="btn" type="button" hidden>Prøv samme billede igen</button>
+      </div>
+    </section>
+
+    <!-- ============ SONG ============ -->
+    <section id="song" hidden aria-labelledby="song-title">
+      <div class="song-head">
+        <label class="visually-hidden" for="song-title">Sangens titel</label>
+        <input id="song-title" class="song-title" type="text" placeholder="Uden titel" autocomplete="off" spellcheck="false">
+        <label class="btn btn-small" for="file-input" title="Læs en ny side">
+          <svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg><span>Nyt billede</span>
+        </label>
+      </div>
+
+      <div id="server-warnings" class="notice notice-warn" hidden></div>
+
+      <div class="song-grid">
+        <aside class="song-side">
+          <!-- Instrument -->
+          <section class="card panel" aria-labelledby="instr-title">
+            <h2 id="instr-title" class="panel-title">Hvem skal spille?</h2>
+            <div id="instruments" class="instruments" role="radiogroup" aria-labelledby="instr-title"></div>
+            <div id="custom-steps" class="custom-steps" hidden>
+              <span class="label">Flyt noderne</span>
+              <div class="stepper">
+                <button id="custom-minus" class="btn btn-icon" type="button" aria-label="En halvtone ned"><svg class="icon"><use href="#i-minus"/></svg></button>
+                <output id="custom-value" aria-live="polite">0</output>
+                <button id="custom-plus" class="btn btn-icon" type="button" aria-label="En halvtone op"><svg class="icon"><use href="#i-plus"/></svg></button>
+              </div>
+              <span class="muted small">halvtoner (−12 til +12)</span>
+            </div>
+            <div class="octave">
+              <span class="label">Passer tonerne ikke til instrumentet?</span>
+              <div class="row">
+                <button id="oct-down" class="btn btn-small" type="button">Oktav ned</button>
+                <button id="oct-up" class="btn btn-small" type="button">Oktav op</button>
+                <span id="oct-status" class="muted small"></span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Photo -->
+          <details id="photo-box" class="card panel photo-box" open>
+            <summary class="panel-title">Dit billede</summary>
+            <a id="photo-link" href="#" target="_blank" rel="noopener" title="Åbn billedet i stor størrelse">
+              <img id="photo" alt="Dit billede af noderne">
+            </a>
+            <p class="muted small">Sammenlign med noderne. Er der fejl, kan du rette dem under «Rediger noderne».</p>
+          </details>
+        </aside>
+
+        <div class="song-main">
+          <p id="key-info" class="key-info" aria-live="polite"></p>
+
+          <!-- Player + tools -->
+          <div class="card toolbar" id="toolbar">
+            <div class="player">
+              <button id="play" class="btn btn-primary btn-play" type="button" aria-label="Afspil">
+                <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span id="play-label">Afspil</span>
+              </button>
+              <button id="restart" class="btn btn-icon" type="button" aria-label="Start forfra" title="Start forfra"><svg class="icon"><use href="#i-restart"/></svg></button>
+              <div class="tempo">
+                <label for="tempo">Tempo <output id="tempo-value">100 %</output></label>
+                <input id="tempo" type="range" min="40" max="150" step="5" value="100">
+              </div>
+            </div>
+            <div class="progressbar" aria-hidden="true"><div id="play-progress"></div></div>
+            <p id="audio-note" class="muted small audio-note">Lyden spiller altid i koncerttone – sådan som det skal lyde sammen med klaveret.</p>
+            <div class="tools">
+              <button id="tg-chords" class="chip-toggle" type="button" aria-pressed="true">Akkorder</button>
+              <button id="tg-lyrics" class="chip-toggle" type="button" aria-pressed="true">Sangtekst</button>
+              <div class="zoom" role="group" aria-label="Størrelse">
+                <button id="zoom-out" class="btn btn-icon" type="button" aria-label="Mindre noder"><svg class="icon"><use href="#i-minus"/></svg></button>
+                <span class="zoom-label">Størrelse</span>
+                <button id="zoom-in" class="btn btn-icon" type="button" aria-label="Større noder"><svg class="icon"><use href="#i-plus"/></svg></button>
+              </div>
+              <button id="stand" class="btn btn-small" type="button"><svg class="icon"><use href="#i-expand"/></svg><span>Nodestativ</span></button>
+              <button id="print" class="btn btn-small" type="button"><svg class="icon"><use href="#i-print"/></svg><span>Print / PDF</span></button>
+              <button id="dl-abc" class="btn btn-small" type="button"><svg class="icon"><use href="#i-download"/></svg><span>Hent ABC</span></button>
+            </div>
+          </div>
+
+          <!-- The sheet -->
+          <div id="sheet" class="sheet">
+            <div id="print-title" class="print-title"></div>
+            <div id="paper" class="paper"></div>
+            <div id="stand-bar" class="stand-bar">
+              <button id="stand-play" class="btn btn-primary btn-icon" type="button" aria-label="Afspil"><svg class="icon"><use href="#i-play"/></svg></button>
+              <button id="stand-zoom-out" class="btn btn-icon" type="button" aria-label="Mindre noder"><svg class="icon"><use href="#i-minus"/></svg></button>
+              <button id="stand-zoom-in" class="btn btn-icon" type="button" aria-label="Større noder"><svg class="icon"><use href="#i-plus"/></svg></button>
+              <button id="stand-exit" class="btn btn-icon" type="button" aria-label="Luk nodestativ-visning"><svg class="icon"><use href="#i-close"/></svg></button>
+            </div>
+          </div>
+          <div id="abc-errors" class="notice notice-warn" hidden></div>
+
+          <!-- Edit -->
+          <details id="edit" class="card panel edit">
+            <summary class="panel-title">Rediger noderne</summary>
+
+            <div class="edit-block">
+              <h3>Beskriv en ændring</h3>
+              <p class="muted small">Skriv med dine egne ord hvad der skal ændres – eller stil et spørgsmål om noderne.</p>
+              <form id="ai-form" class="ai-form">
+                <textarea id="ai-input" rows="2" placeholder="Fx: Takt 3 skal starte med et G" aria-label="Beskriv en ændring"></textarea>
+                <button id="ai-submit" class="btn btn-primary" type="submit">Udfør</button>
+              </form>
+              <div class="chips" id="ai-chips">
+                <button type="button" class="chip">Gør melodien enklere</button>
+                <button type="button" class="chip">Fjern akkordbetegnelserne</button>
+                <button type="button" class="chip">Skriv det en oktav lavere</button>
+                <button type="button" class="chip">Forklar hvad taktarten betyder</button>
+              </div>
+              <div id="ai-result" class="ai-result" hidden aria-live="polite"></div>
+            </div>
+
+            <div class="edit-block">
+              <div class="row space-between">
+                <h3>Nodekoden</h3>
+                <button id="undo" class="btn btn-small" type="button" disabled><svg class="icon"><use href="#i-undo"/></svg><span>Fortryd</span></button>
+              </div>
+              <p class="muted small">Noderne er gemt som tekst i et format der hedder <em>ABC</em>. Hver bogstav er en tone (C D E F G A B; små bogstaver er en oktav højere). Ret direkte her – noderne opdateres mens du skriver. Koden står altid i koncerttone (som til klaver).</p>
+              <textarea id="abc-text" class="abc-text" rows="12" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Nodekode i ABC-format"></textarea>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LIBRARY ============ -->
+    <section id="bibliotek" class="card panel library" aria-labelledby="lib-title">
+      <h2 id="lib-title" class="panel-title">Mine sange</h2>
+      <p id="lib-empty" class="muted">Her kommer de sange, du har læst. De gemmes kun på denne enhed.</p>
+      <ul id="lib-list" class="lib-list"></ul>
+    </section>
+
+    <!-- ============ HELP ============ -->
+    <section id="hjaelp" class="card panel help" aria-labelledby="help-title">
+      <h2 id="help-title" class="panel-title">Sådan virker det</h2>
+      <ol class="steps">
+        <li><strong>Tag et billede</strong> af én side i sangbogen – lige oppefra og i godt lys.</li>
+        <li><strong>Vent lidt</strong>, mens noderne bliver læst. Det tager typisk et halvt til to minutter.</li>
+        <li><strong>Vælg instrument.</strong> Til altsax vælger du «Altsax (Es)». Tryk på Afspil for at høre melodien.</li>
+      </ol>
+      <h3>Hvorfor skal saxofonen have andre noder end klaveret?</h3>
+      <p>En altsax er et såkaldt <em>transponerende instrument</em>: Når saxofonisten læser og spiller et C, kommer der faktisk et Es ud (tonen ni halvtoner – en stor sekst – lavere). Hvis I begge spiller efter de samme noder, lyder det derfor forkert sammen.</p>
+      <p>Løsningen er at skrive saxofonens noder ni halvtoner højere. Så når klaveret spiller C-dur, læser saxofonen A-dur – og det klinger præcis ens. Det klarer siden for jer, når I vælger «Altsax (Es)». Tenorsax, klarinet og trompet er stemt i B og skal også have flyttede noder – vælg bare instrumentet på listen.</p>
+      <h3>Hvis noget ser forkert ud</h3>
+      <p>Aflæsningen sker automatisk og kan tage fejl – fx en forkert tone, rytme eller fortegn. Sammenlign med dit billede, og ret fejlene under <strong>«Rediger noderne»</strong>, enten ved at beskrive ændringen med almindelige ord eller ved at rette koden direkte.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Sangene gemmes kun i denne browser. Noderne vises med <a href="https://www.abcjs.net/" rel="noopener">abcjs</a>.</p>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/vendor/abcjs-basic-min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

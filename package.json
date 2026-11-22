@@ -1,0 +1,22 @@
+{
+  "name": "noder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Noder: photograph sheet music, get ABC notation, transpose it.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "MUX_MOCK=1 node --watch server/index.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "abcjs": "6.4.4",
+    "express": "5.3.0",
+    "multer": "2.5.0",
+    "sharp": "0.35.5"
+  }
+}
