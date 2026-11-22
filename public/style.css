@@ -224,7 +224,22 @@ main { max-width: 1280px; margin: 0 auto; padding: 0 16px 32px; }
   .instr-panel { padding: 14px 16px; }
   .instr-panel .panel-title { font-size: 1.05rem; margin-bottom: .5rem; }
   .octave { margin-top: 10px; padding-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
-  .octave .label { margin: 0; font-weight: 500; color: var(--ink-2); }
+  .octave .label { margin: 0; font-weight: 500; color: var(--ink-2); font-size: .85rem; }
+  .octave { margin-top: 8px; padding-top: 8px; }
+  .octave .btn { min-height: 40px; }
+  .instr-current-desc { font-size: .85rem; margin-top: 4px; }
+}
+@media (max-width: 600px) {
+  .audio-note { display: none; }
+  .toolbar { padding: 12px; }
+  .progressbar { margin: 8px 0; }
+  .tools { gap: 6px; padding-top: 8px; }
+  .tools .btn-small, .chip-toggle { min-height: 42px; font-size: .88rem; }
+  .key-info { font-size: .98rem; padding: 10px 14px; }
+}
+@media (max-width: 420px) {
+  .btn-huge { font-size: 1.05rem; padding: 0 20px; }
+  .card { padding: 16px; }
 }
 .custom-steps { margin-top: 14px; }
 .stepper { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }

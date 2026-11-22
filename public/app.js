@@ -460,7 +460,7 @@
         add_classes: true,
         visualTranspose: totalTranspose(),
         staffwidth: staffwidth,
-        wrap: { minSpacing: 1.6, maxSpacing: 2.6, preferredMeasuresPerLine: staffwidth < 420 ? 2 : staffwidth < 640 ? 3 : 4 },
+        wrap: { minSpacing: 1.6, maxSpacing: 2.6, preferredMeasuresPerLine: staffwidth < 340 ? 2 : staffwidth < 600 ? 3 : 4 },
         paddingleft: 0, paddingright: 0, paddingtop: 4, paddingbottom: 12,
         foregroundColor: "#111111",
         format: {
