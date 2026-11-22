@@ -23,5 +23,7 @@ export function loadConfig(env = process.env) {
     readLimit: int(env.RATE_LIMIT_READ, 20),
     editLimit: int(env.RATE_LIMIT_EDIT, 60),
     rateWindowMs: 10 * 60 * 1000,
+    // Where the shared song library lives (a Railway volume in production).
+    dataDir: (env.DATA_DIR || './data').trim(),
   };
 }

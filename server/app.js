@@ -11,6 +11,7 @@ import { createRateLimiter } from './ratelimit.js';
 import { normaliseImage, ImageError } from './image.js';
 import { readSheet, editAbc } from './omr.js';
 import { MuxError } from './mux.js';
+import { createSongStore } from './songs.js';
 import { MOCK_ABC, MOCK_TITLE, MOCK_READ_WARNING, MOCK_EDIT_EXPLANATION, sleep } from './mock.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,6 +73,8 @@ export function createApp(config = loadConfig()) {
   });
   app.locals.limiters = { read: readLimiter, edit: editLimiter };
   app.locals.config = config;
+  const songs = createSongStore(config.dataDir);
+  app.locals.songs = songs;
 
   app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -104,13 +107,22 @@ export function createApp(config = loadConfig()) {
       if (!req.file) return sendError(res, 400, 'Der blev ikke sendt noget billede. Vælg et billede af noderne.');
       try {
         const img = await normaliseImage(req.file.buffer);
+        let out;
         if (config.mock) {
           await sleep(config.mockDelayMs);
-          return res.json({ abc: MOCK_ABC, title: MOCK_TITLE, warnings: [MOCK_READ_WARNING] });
+          out = { abc: MOCK_ABC, title: MOCK_TITLE, warnings: [MOCK_READ_WARNING] };
+        } else {
+          console.log(`[read] image ${req.file.size} bytes -> ${img.width}x${img.height} jpeg ${img.buffer.length} bytes`);
+          out = await readSheet(config, img.buffer);
         }
-        console.log(`[read] image ${req.file.size} bytes -> ${img.width}x${img.height} jpeg ${img.buffer.length} bytes`);
-        const out = await readSheet(config, img.buffer);
-        return res.json(out);
+        let id = null;
+        try {
+          const song = await songs.create({ title: out.title, abc: out.abc, warnings: out.warnings, photo: img.buffer });
+          id = song.id;
+        } catch (e) {
+          console.error('[read] could not save song:', e?.message || e);
+        }
+        return res.json({ ...out, id });
       } catch (err) {
         return handleFailure(res, err, 'read');
       }
@@ -136,6 +148,30 @@ export function createApp(config = loadConfig()) {
     } catch (err) {
       return handleFailure(res, err, 'edit');
     }
+  });
+
+  // ── Shared song library (no login: everyone sees everything) ──
+  app.get('/api/songs', async (req, res) => {
+    try { res.json(await songs.list()); } catch (err) { handleFailure(res, err, 'songs'); }
+  });
+  app.get('/api/songs/:id', async (req, res) => {
+    const song = await songs.get(req.params.id);
+    return song ? res.json(song) : sendError(res, 404, 'Sangen findes ikke.');
+  });
+  app.put('/api/songs/:id', express.json({ limit: '256kb' }), async (req, res) => {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    if (typeof body.abc === 'string' && body.abc.length > MAX_ABC_CHARS) return sendError(res, 413, 'Noderne er for lange.');
+    const song = await songs.update(req.params.id, { abc: body.abc, title: body.title });
+    return song ? res.json(song) : sendError(res, 404, 'Sangen findes ikke.');
+  });
+  app.delete('/api/songs/:id', async (req, res) => {
+    return (await songs.remove(req.params.id)) ? res.json({ ok: true }) : sendError(res, 404, 'Sangen findes ikke.');
+  });
+  app.get('/api/songs/:id/:file', (req, res) => {
+    const file = songs.filePath(req.params.id, req.params.file);
+    if (!file) return sendError(res, 404, 'Billedet findes ikke.');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.sendFile(file, (err) => { if (err && !res.headersSent) sendError(res, 404, 'Billedet findes ikke.'); });
   });
 
   app.use('/api', (req, res) => sendError(res, 404, 'Ukendt adresse.'));

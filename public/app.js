@@ -312,7 +312,7 @@
       var isField = /^\s*[A-Za-z+]:/.test(line);
       var isLyric = /^\s*[wW]:/.test(line) || (lastWasLyric && /^\s*\+:/.test(line));
       if (isField) lastWasLyric = isLyric;
-      if (!showLyrics && isLyric) return;
+      if (!showLyrics && isLyric) { out.push("%"); return; } // keep line numbers stable
       if (!showChords && !isField && !/^\s*%/.test(line)) line = line.replace(/"[^"\n]*"/g, "");
       if (!showLyrics && !isField) line = line.replace(/\[w:[^\]]*\]/g, "");
       out.push(line);
@@ -441,6 +441,8 @@
       S.visualObj = null; updateKeyInfo(); showAbcErrors([]);
       return;
     }
+    // A little more air between systems so lyrics and the next line's chords don't collide.
+    abc = injectSpacing(abc);
     var width = paper.clientWidth || 340;
     lastRenderWidth = width;
     var zoom = ZOOMS[prefs.zoom];
@@ -461,9 +463,7 @@
           vocalfont: '"Helvetica" 13',
           annotationfont: '"Helvetica" 12',
           composerfont: '"Helvetica" 11 italic',
-          tempofont: '"Helvetica" 11',
-          staffsep: 56,
-          vocalspace: 8
+          tempofont: '"Helvetica" 11'
         }
       });
     } catch (e) {
@@ -476,6 +476,17 @@
     var warnings = (S.visualObj && S.visualObj.warnings) || [];
     if (S.visualObj && (!S.visualObj.lines || !S.visualObj.lines.length)) warnings = warnings.concat(["Ingen noder fundet i koden."]);
     showAbcErrors(warnings);
+  }
+
+  var SPACING_LINES = ["%%staffsep 62", "%%vocalspace 12"];
+  var injectedAt = -1; // line index where spacing directives were inserted (for error line numbers)
+  function injectSpacing(abc) {
+    var lines = abc.split(/\r?\n/);
+    var i = 0;
+    for (var k = 0; k < lines.length; k++) { if (/^\s*X:/.test(lines[k])) { i = k + 1; break; } }
+    injectedAt = i;
+    lines.splice.apply(lines, [i, 0].concat(SPACING_LINES));
+    return lines.join("\n");
   }
 
   function updateKeyInfo() {
@@ -517,7 +528,11 @@
   function friendlyWarning(w) {
     var t = String(w).replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
     var map = [
-      [/Music Line:(\d+):(\d+):?/i, "Linje $1, tegn $2:"],
+      [/Music Line:(\d+):(\d+):?/i, function (all, ln, col) {
+        ln = parseInt(ln, 10);
+        if (injectedAt >= 0 && ln > injectedAt) ln -= SPACING_LINES.length;
+        return "Linje " + ln + ", tegn " + col + ":";
+      }],
       [/Unknown character ignored/i, "ukendt tegn – ignoreret"],
       [/Unknown decoration/i, "ukendt pyntetegn"],
       [/Unknown directive/i, "ukendt kommando"],
@@ -828,7 +843,10 @@
         toast("Kunne ikke transponere filen – du får originalen (koncerttone).");
       }
     }
-    var name = (S.song.title || "noder").replace(/[\\/:*?"<>|]+/g, "").trim().slice(0, 60) || "noder";
+    var name = (S.song.title || "noder").toLowerCase()
+      .replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "noder";
     var blob = new Blob([abc], { type: "text/plain;charset=utf-8" });
     var a = el("a", { href: URL.createObjectURL(blob), download: name + suffix + ".abc" });
     document.body.appendChild(a); a.click();
