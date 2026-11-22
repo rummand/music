@@ -6,6 +6,7 @@ import {
   OMR_SYSTEM,
   OMR_INSTRUCTIONS,
   omrRetryMessage,
+  omrVerifyMessage,
   EDIT_SYSTEM,
   editUserMessage,
   editRetryMessage,
@@ -27,6 +28,7 @@ function checkAnswer(content, finishReason) {
  * @returns {Promise<{abc:string, title:string|null, warnings:string[]}>}
  */
 export async function readSheet(config, jpeg, { fetchImpl } = {}) {
+  const started = Date.now();
   const dataUri = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
   const messages = [
     { role: 'system', content: OMR_SYSTEM },
@@ -73,11 +75,87 @@ export async function readSheet(config, jpeg, { fetchImpl } = {}) {
     }
   }
 
+  if (verifyEnabled(config)) {
+    const elapsed = Date.now() - started;
+    if (elapsed < VERIFY_SKIP_AFTER_MS) {
+      result = await verifyPass(config, messages, result, { fetchImpl });
+    } else {
+      console.warn(`[read] skipping verify pass: first answer took ${elapsed} ms`);
+    }
+  }
+
+  // Deterministic clean-up of common model mistakes; re-validate the outcome.
+  const fixed = postProcess(result.abc);
+  if (fixed !== result.abc) {
+    const again = validateAbc(fixed);
+    if (again.ok) result = { ...again, notes: [...result.notes, ...again.notes] };
+  }
+
   return {
     abc: result.abc,
     title: getTitle(result.abc),
     warnings: [...result.notes, ...result.warnings],
   };
+}
+
+// The verify pass (a second look at the picture with the first transcription
+// and a reading aid) is on when OMR_VERIFY=1 or config.omrVerify is true.
+const VERIFY_SKIP_AFTER_MS = 20_000;
+function verifyEnabled(config) {
+  if (typeof config.omrVerify === 'boolean') return config.omrVerify;
+  return /^(1|true|yes|on)$/i.test(String(process.env.OMR_VERIFY ?? '').trim());
+}
+
+const noteCount = (abc) => {
+  const { lines, k } = splitTune(abc);
+  let n = 0;
+  for (let li = k + 1; li < lines.length; li++) if (isMusic(lines[li])) n += tokenizeMusicLine(lines[li]).filter((t) => t.t === 'note').length;
+  return n;
+};
+
+/** Ask the model to check its transcription against the image. Falls back to `first` on any problem. */
+async function verifyPass(config, messages, first, { fetchImpl }) {
+  const aid = readingAid(first.abc);
+  if (!aid) return first;
+  try {
+    const answer = await chat(config, {
+      model: config.visionModel,
+      messages: [
+        messages[0],
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: omrVerifyMessage(first.abc, aid) },
+            messages[1].content.find((p) => p.type === 'image_url'),
+          ],
+        },
+      ],
+      maxTokens: 4000,
+      temperature: 0,
+      timeoutMs: 60_000,
+      fetchImpl,
+    });
+    const checked = checkAnswer(answer.content, answer.finishReason);
+    if (!checked.ok) {
+      console.warn(`[read] verify answer invalid: ${checked.errors.join(' | ')}; keeping first answer`);
+      return first;
+    }
+    const n0 = noteCount(first.abc);
+    const n1 = noteCount(checked.abc);
+    if (n1 < n0 * 0.6 || n1 > n0 * 1.6) {
+      console.warn(`[read] verify answer changed note count ${n0} -> ${n1}; keeping first answer`);
+      return first;
+    }
+    if (checked.warnings.length > first.warnings.length) {
+      console.warn(`[read] verify answer has more bar problems (${checked.warnings.length} > ${first.warnings.length}); keeping first answer`);
+      return first;
+    }
+    console.log(`[read] verify pass: ${checked.abc === first.abc ? 'no changes' : 'corrected'}`);
+    return { ...checked, notes: [...new Set([...first.notes, ...checked.notes])] };
+  } catch (err) {
+    console.warn(`[read] verify pass failed (${err.message}); keeping first answer`);
+    return first;
+  }
 }
 
 /** Text before the first code fence, as the explanation. */
@@ -139,7 +217,6 @@ export async function editAbc(config, abc, instruction, { fetchImpl } = {}) {
 //    first chord is Bb and whose melody ends on Bb)
 
 const STEP = 'CDEFGAB';
-const STEP_PC = [0, 2, 4, 5, 7, 9, 11];
 
 /**
  * Split an ABC tune into header lines and body lines, and tokenize music lines.
@@ -401,4 +478,76 @@ export function postProcess(abc) {
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Reading aid for the verification pass.
+
+function staffPosition(idx) {
+  const p = idx - 30; // 0 = bottom line, 1 = first space, ... 8 = top line
+  if (p >= 0 && p <= 8) {
+    const n = Math.floor(p / 2) + 1;
+    const ord = ['', '1st', '2nd', '3rd', '4th', '5th'][n];
+    return p % 2 === 0 ? `${ord} line` : `${ord} space`;
+  }
+  if (p === -1) return 'space just below the staff';
+  if (p === 9) return 'space just above the staff';
+  if (p < -1) {
+    const ledgers = Math.floor((-p) / 2);
+    return (-p) % 2 === 0 ? `on ledger line ${ledgers} below the staff` : `below ledger line ${ledgers} under the staff`;
+  }
+  const ledgers = Math.floor((p - 8) / 2);
+  return (p - 8) % 2 === 0 ? `on ledger line ${ledgers} above the staff` : `above ledger line ${ledgers} over the staff`;
+}
+
+function lookOf(eighths) {
+  const table = {
+    0.5: 'sixteenth (filled, double beam)',
+    1: 'eighth (filled, beam/flag)',
+    1.5: 'dotted eighth',
+    2: 'quarter (filled, stem)',
+    3: 'dotted quarter',
+    4: 'half (HOLLOW, stem)',
+    6: 'dotted half (HOLLOW, dot)',
+    8: 'whole (HOLLOW, no stem)',
+  };
+  const key = Math.round(eighths * 1000) / 1000;
+  return table[key] || `${key}/8 long`;
+}
+
+/** Bar-by-bar description of a single-voice treble-clef ABC tune, or null. */
+export function readingAid(abc) {
+  const { lines, k } = splitTune(abc);
+  if (k < 0) return null;
+  if (lines.some((l) => /^V:|\[V:/.test(l)) || /clef\s*=/i.test(lines[k])) return null;
+  let unit = 1 / 8;
+  for (const l of lines.slice(0, k)) {
+    const m = /^L:\s*(\d+)\/(\d+)/.exec(l);
+    if (m) unit = Number(m[1]) / Number(m[2]);
+  }
+  const out = [];
+  let bar = [];
+  let barNo = 1;
+  let system = 0;
+  const flush = () => {
+    if (!bar.length) return;
+    out.push(`  bar ${barNo}: ${bar.join('; ')}`);
+    barNo++;
+    bar = [];
+  };
+  for (let li = k + 1; li < lines.length; li++) {
+    if (!isMusic(lines[li])) continue;
+    system++;
+    out.push(`System ${system}:`);
+    for (const t of tokenizeMusicLine(lines[li])) {
+      if (t.t === 'bar') flush();
+      else if (t.t === 'note') {
+        const name = `${t.acc}${spell(t.letter, t.idx)}`;
+        bar.push(`${name} ${staffPosition(t.idx)}, ${lookOf((t.len * unit) / (1 / 8))}`);
+      } else if (t.t === 'rest') bar.push(`rest ${lookOf((t.len * unit) / (1 / 8))}`);
+    }
+    flush();
+    if (out.length > 120) break;
+  }
+  return out.join('\n');
 }
