@@ -72,3 +72,51 @@ test('reading aid names staff positions and note shapes', () => {
   assert.match(aid, /bar 2: d 4th line, whole/);
   assert.equal(readingAid(`${H}K:C clef=bass\nC8|`), null);
 });
+
+// ---------------------------------------------------------------------------
+// readSheet with the optional verify pass, against a fake fetch.
+import { readSheet } from '../server/omr.js';
+
+function fakeFetch(answers, calls) {
+  return async (url, init) => {
+    calls.push(JSON.parse(init.body));
+    const content = answers.shift() ?? 'NOT_MUSIC';
+    return new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+}
+const cfg = (omrVerify) => ({ muxBaseUrl: 'http://fake', muxApiKey: 'k', visionModel: 'vision', timeoutMs: 5000, omrVerify });
+const fence = (abc) => `Analyse.\n\n\`\`\`abc\n${abc}\n\`\`\``;
+
+test('readSheet: verify pass replaces the first answer with the checked one', async () => {
+  const truth = fs.readFileSync(path.join(FIX, 'mester-jakob.abc'), 'utf8').trim();
+  const wrong = truth.replace('A2 B2 c4', 'A2 B2 c2 A2');
+  const calls = [];
+  const r = await readSheet(cfg(true), Buffer.from('jpeg'), { fetchImpl: fakeFetch([fence(wrong), `- Takt 2: c er en halvnode.\n\n${fence(truth)}`], calls) });
+  assert.equal(calls.length, 2);
+  assert.equal(r.abc.trim(), truth);
+  const second = calls[1].messages[1].content;
+  assert.ok(second.some((p) => p.type === 'image_url'));
+  assert.match(second.find((p) => p.type === 'text').text, /bar 2: A 2nd space, quarter/);
+});
+
+test('readSheet: an unusable verify answer keeps the first answer', async () => {
+  const truth = fs.readFileSync(path.join(FIX, 'glade-jul.abc'), 'utf8').trim();
+  for (const bad of ['Sorry, I cannot.', fence('X:1\nK:C\nC2 |]')]) {
+    const calls = [];
+    const r = await readSheet(cfg(true), Buffer.from('jpeg'), { fetchImpl: fakeFetch([fence(truth), bad], calls) });
+    assert.equal(calls.length, 2);
+    assert.equal(r.abc.trim(), truth);
+  }
+});
+
+test('readSheet: verify pass is off unless enabled; post-processing still applies', async () => {
+  const calls = [];
+  const model = `X:1\nT:Glade jul\nM:3/4\nL:1/8\nK:F\n|:"Bb"F3 G F2 | D6 | "Eb"G4 G2 | B,6 |]`;
+  const r = await readSheet(cfg(false), Buffer.from('jpeg'), { fetchImpl: fakeFetch([fence(model)], calls) });
+  assert.equal(calls.length, 1);
+  assert.match(r.abc, /^K:Bb$/m);
+  assert.doesNotMatch(r.abc, /\|:/);
+});
