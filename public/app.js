@@ -355,7 +355,7 @@
     if (!S.song) return 0;
     var ins = instrumentById(S.song.instrument);
     var base = ins.semis === null ? (S.song.custom || 0) : ins.semis;
-    return base + 12 * (S.song.octave || 0);
+    return base + 12 * (S.song.octave || 0) + (S.song.semi || 0);
   }
 
   function buildInstrumentPicker() {
@@ -388,6 +388,10 @@
     $("oct-status").textContent = o === 0 ? "" : (o > 0 ? "+" : "−") + Math.abs(o) + " oktav" + (Math.abs(o) > 1 ? "er" : "");
     $("oct-down").disabled = o <= -2;
     $("oct-up").disabled = o >= 2;
+    var sm = S.song ? (S.song.semi || 0) : 0;
+    $("semi-status").textContent = sm === 0 ? "" : (sm > 0 ? "+" : "−") + Math.abs(sm) + " halvtone" + (Math.abs(sm) > 1 ? "r" : "");
+    $("semi-down").disabled = sm <= -11;
+    $("semi-up").disabled = sm >= 11;
   }
   function chooseInstrument(id) {
     if (!S.song) return;
@@ -406,6 +410,7 @@
     return {
       instrument: v.instrument || prefs.instrument || "altsax",
       octave: v.octave || 0,
+      semi: v.semi || 0,
       custom: v.custom !== undefined ? v.custom : (prefs.custom || 0)
     };
   }
@@ -413,7 +418,7 @@
     syncInstrumentUi();
     render();
     if (S.song && S.song.id) {
-      prefs.perSong[S.song.id] = { instrument: S.song.instrument, octave: S.song.octave || 0, custom: S.song.custom || 0, t: Date.now() };
+      prefs.perSong[S.song.id] = { instrument: S.song.instrument, octave: S.song.octave || 0, semi: S.song.semi || 0, custom: S.song.custom || 0, t: Date.now() };
     }
     savePrefs();
   }
@@ -431,6 +436,8 @@
   $("custom-plus").addEventListener("click", function () { if (!S.song) return; S.song.custom = clamp((S.song.custom || 0) + 1, -12, 12); prefs.custom = S.song.custom; afterTransposeChange(); });
   $("oct-down").addEventListener("click", function () { if (!S.song) return; S.song.octave = clamp((S.song.octave || 0) - 1, -2, 2); afterTransposeChange(); });
   $("oct-up").addEventListener("click", function () { if (!S.song) return; S.song.octave = clamp((S.song.octave || 0) + 1, -2, 2); afterTransposeChange(); });
+  $("semi-down").addEventListener("click", function () { if (!S.song) return; S.song.semi = clamp((S.song.semi || 0) - 1, -11, 11); afterTransposeChange(); });
+  $("semi-up").addEventListener("click", function () { if (!S.song) return; S.song.semi = clamp((S.song.semi || 0) + 1, -11, 11); afterTransposeChange(); });
 
   // ------------------------------------------------------------------
   // Rendering
@@ -513,6 +520,8 @@
     var octTxt = "";
     var o = S.song.octave || 0;
     if (o) octTxt = " (flyttet " + (Math.abs(o) === 1 ? "en" : "to") + " oktav" + (Math.abs(o) > 1 ? "er" : "") + (o > 0 ? " op" : " ned") + ")";
+    var sm = S.song.semi || 0;
+    if (sm) octTxt += " (" + (sm > 0 ? "+" : "−") + Math.abs(sm) + " halvtone" + (Math.abs(sm) > 1 ? "r" : "") + ")";
     var who = ins.id === "egen" ? "med din egen indstilling" : "til " + ins.who;
     var html;
     if (!orig) {

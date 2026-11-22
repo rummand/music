@@ -129,3 +129,276 @@ export async function editAbc(config, abc, instruction, { fetchImpl } = {}) {
   const explanation = explanationOf(content) || 'Noderne er opdateret.';
   return { abc: result.abc, explanation };
 }
+
+// ---------------------------------------------------------------------------
+// Post-processing of the model's ABC: deterministic fixes for the mistakes the
+// vision model makes most often (see test/omr-eval.mjs results):
+//  - "|:" written at the start of lines where no repeat is printed (no ":|" follows)
+//  - single notes or runs written an octave off (B, for B), seen as leaps > an octave
+//  - one sharp/flat of the key signature missed (K:F for a tune in Bb whose
+//    first chord is Bb and whose melody ends on Bb)
+
+const STEP = 'CDEFGAB';
+const STEP_PC = [0, 2, 4, 5, 7, 9, 11];
+
+/**
+ * Split an ABC tune into header lines and body lines, and tokenize music lines.
+ * Tokens: {t:'note', i, j, acc, letter, octMarks, len, idx} (idx = diatonic step, C4 = 28),
+ *         {t:'rest', i, j, len}, {t:'bar', i, j, text}, {t:'chord', text} ("..." symbols),
+ *         {t:'stack'} (a [CEG] chord: notes inside are ignored).
+ */
+export function tokenizeMusicLine(line) {
+  const toks = [];
+  let i = 0;
+  const readLen = (k) => {
+    const m = /^(\d*)(\/*)(\d*)/.exec(line.slice(k));
+    let len = m[1] ? Number(m[1]) : 1;
+    if (m[2]) len /= m[3] ? Number(m[3]) : 2 ** m[2].length;
+    return { len, end: k + m[0].length };
+  };
+  while (i < line.length) {
+    const c = line[i];
+    if (c === '%') break;
+    if (c === '"') {
+      const j = line.indexOf('"', i + 1);
+      const end = j < 0 ? line.length : j + 1;
+      toks.push({ t: 'chord', i, j: end, text: line.slice(i + 1, end - 1) });
+      i = end;
+      continue;
+    }
+    if (c === '!' || c === '+' || c === '{') {
+      const j = line.indexOf(c === '{' ? '}' : c, i + 1);
+      i = j < 0 ? line.length : j + 1;
+      continue;
+    }
+    if (c === '[' && /^[A-Za-z]:/.test(line.slice(i + 1, i + 3))) {
+      const j = line.indexOf(']', i + 1);
+      i = j < 0 ? line.length : j + 1;
+      continue;
+    }
+    if (c === '|' || c === ':' || (c === '[' && /[|\d]/.test(line[i + 1] || '')) || c === ']') {
+      let j = i;
+      while (j < line.length && (/[|:\]]/.test(line[j]) || (line[j] === '[' && /[\d|]/.test(line[j + 1] || '')))) j++;
+      while (j < line.length && /\d/.test(line[j])) j++;
+      toks.push({ t: 'bar', i, j, text: line.slice(i, j) });
+      i = j;
+      continue;
+    }
+    if (c === '[') {
+      const j = line.indexOf(']', i + 1);
+      const end = j < 0 ? line.length : j + 1;
+      const r = readLen(end);
+      toks.push({ t: 'stack', i, j: r.end });
+      i = r.end;
+      continue;
+    }
+    const m = /^([\^=_]*)([A-Ga-g])([,']*)/.exec(line.slice(i));
+    if (m) {
+      const r = readLen(i + m[0].length);
+      const upper = m[2] === m[2].toUpperCase();
+      let oct = upper ? 4 : 5;
+      for (const ch of m[3]) oct += ch === "'" ? 1 : -1;
+      const step = STEP.indexOf(m[2].toUpperCase());
+      toks.push({ t: 'note', i, j: r.end, acc: m[1], letter: m[2].toUpperCase(), octMarks: m[3], len: r.len, idx: oct * 7 + step, lenText: line.slice(i + m[0].length, r.end) });
+      i = r.end;
+      continue;
+    }
+    if (c === 'z' || c === 'x') {
+      const r = readLen(i + 1);
+      toks.push({ t: 'rest', i, j: r.end, len: r.len });
+      i = r.end;
+      continue;
+    }
+    i++;
+  }
+  return toks;
+}
+
+function splitTune(abc) {
+  const lines = abc.replace(/\r\n?/g, '\n').split('\n');
+  const k = lines.findIndex((l) => /^K:/.test(l));
+  return { lines, k };
+}
+const isMusic = (l) => l.trim() && !/^[A-Za-z+]:/.test(l) && !l.trim().startsWith('%');
+
+/** ABC spelling of a diatonic index (C4 = 28 -> "C", 35 -> "c", 21 -> "C,"). */
+function spell(letter, idx) {
+  const oct = Math.floor(idx / 7);
+  if (oct >= 5) return letter.toLowerCase() + "'".repeat(oct - 5);
+  return letter + ','.repeat(4 - oct);
+}
+
+/** Replace "|:" that is never closed by ":|" / "::" with a plain bar line. */
+export function fixOrphanRepeats(abc) {
+  const { lines, k } = splitTune(abc);
+  if (k < 0) return abc;
+  // Collect all bar tokens in order with their positions.
+  const bars = [];
+  lines.forEach((l, li) => {
+    if (li <= k || !isMusic(l)) return;
+    for (const t of tokenizeMusicLine(l)) if (t.t === 'bar') bars.push({ li, ...t });
+  });
+  const orphans = [];
+  bars.forEach((b, n) => {
+    if (!/\|:$|\|:\d*$/.test(b.text) || /:\|/.test(b.text) || /::/.test(b.text)) return;
+    // Look for the next bar with a repeat end before another repeat start.
+    for (let m = n + 1; m < bars.length; m++) {
+      const t = bars[m].text;
+      if (/^:|:\||::/.test(t)) return; // closed
+      if (/\|:/.test(t)) break; // another start: this one is an orphan
+    }
+    orphans.push(b);
+  });
+  if (!orphans.length) return abc;
+  // Edit from the end so positions stay valid.
+  for (const b of orphans.reverse()) {
+    const l = lines[b.li];
+    const before = l.slice(0, b.i);
+    const repl = b.text.replace(/\|:/, '|');
+    // At the very start of a line a plain "|" is not needed.
+    if (!before.trim() && repl === '|') lines[b.li] = l.slice(b.j).replace(/^\s+/, '');
+    else lines[b.li] = before + repl + l.slice(b.j);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Move notes back by an octave when the melody leaps more than an octave
+ * (a 9th or more) between neighbouring notes on the same line. Songs almost
+ * never do that; the model does it when it gets the octave marks wrong.
+ */
+export function fixOctaveLeaps(abc) {
+  const { lines, k } = splitTune(abc);
+  if (k < 0) return abc;
+  if (lines.some((l) => /^V:|\[V:/.test(l)) || /clef\s*=\s*(bass|alto|tenor)|\bbass\b/i.test(lines[k])) return abc;
+  // Median pitch of the whole tune, to tell which side of a leap is the odd one.
+  const all = [];
+  for (let li = k + 1; li < lines.length; li++) {
+    if (isMusic(lines[li])) for (const t of tokenizeMusicLine(lines[li])) if (t.t === 'note') all.push(t.idx);
+  }
+  if (all.length < 4) return abc;
+  const sorted = [...all].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const toward = (idx, ref) => {
+    while (idx - ref > 7) idx -= 7;
+    while (ref - idx > 7) idx += 7;
+    return idx;
+  };
+  let changed = false;
+  for (let li = k + 1; li < lines.length; li++) {
+    const l = lines[li];
+    if (!isMusic(l)) continue;
+    const notes = [];
+    let segStart = 0;
+    for (const t of tokenizeMusicLine(l)) {
+      if (t.t === 'stack') segStart = notes.length; // after a [chord], start afresh
+      else if (t.t === 'note') notes.push({ ...t, newIdx: t.idx, first: notes.length === segStart });
+    }
+    for (let n = 1; n < notes.length; n++) {
+      const prev = notes[n - 1];
+      const cur = notes[n];
+      if (cur.first) continue;
+      if (Math.abs(cur.newIdx - prev.newIdx) <= 7) continue;
+      if (prev.first && Math.abs(prev.newIdx - median) > Math.abs(cur.newIdx - median)) {
+        prev.newIdx = toward(prev.newIdx, cur.newIdx);
+      } else {
+        cur.newIdx = toward(cur.newIdx, prev.newIdx);
+      }
+    }
+    const edits = notes.filter((t) => t.newIdx !== t.idx);
+    if (edits.length) {
+      let s = l;
+      for (const e of edits.reverse()) s = s.slice(0, e.i) + e.acc + spell(e.letter, e.newIdx) + e.lenText + s.slice(e.j);
+      lines[li] = s;
+      changed = true;
+    }
+  }
+  return changed ? lines.join('\n') : abc;
+}
+
+// Key signatures as number of sharps (+) / flats (-) for major tonics.
+const MAJOR_FIFTHS = { C: 0, G: 1, D: 2, A: 3, E: 4, B: 5, 'F#': 6, 'C#': 7, F: -1, Bb: -2, Eb: -3, Ab: -4, Db: -5, Gb: -6, Cb: -7 };
+const SHARP_ORDER = 'FCGDAEB';
+const FLAT_ORDER = 'BEADGCF';
+const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+/** Parse a K: value into {fifths, tonic, minor} or null for anything unusual. */
+function parseKey(value) {
+  const m = /^\s*([A-G])([#b]?)\s*(m|min|minor|maj|major|ion|ionian|aeo|aeolian)?\s*$/i.exec(value);
+  if (!m) return null;
+  const tonic = m[1].toUpperCase() + (m[2] || '');
+  const minor = /^(m|min|minor|aeo|aeolian)$/i.test(m[3] || '');
+  let fifths = MAJOR_FIFTHS[tonic];
+  if (fifths == null) {
+    // minor: relative major is a minor third up
+    if (!minor) return null;
+  }
+  if (minor) {
+    const pc = (PC[tonic[0]] + (tonic[1] === '#' ? 1 : tonic[1] === 'b' ? -1 : 0) + 3 + 12) % 12;
+    const rel = Object.keys(MAJOR_FIFTHS).find((t) => pcOf(t) === pc && Math.abs(MAJOR_FIFTHS[t]) <= 6);
+    if (!rel) return null;
+    fifths = MAJOR_FIFTHS[rel];
+  }
+  return { fifths, tonic, minor };
+}
+function pcOf(name) {
+  return (PC[name[0]] + (name[1] === '#' ? 1 : name[1] === 'b' ? -1 : 0) + 12) % 12;
+}
+function keyAccidental(fifths, letter) {
+  if (fifths > 0) return SHARP_ORDER.slice(0, fifths).includes(letter) ? 1 : 0;
+  if (fifths < 0) return FLAT_ORDER.slice(0, -fifths).includes(letter) ? -1 : 0;
+  return 0;
+}
+
+/**
+ * If the key signature looks one sharp/flat short (or long), fix K:.
+ * Evidence needed: the first chord symbol and the last melody note name the
+ * same pitch, that pitch is not the tonic of the written key, and the key of
+ * that chord differs from the written key signature by exactly one accidental.
+ */
+export function fixKeyFromChords(abc) {
+  const { lines, k } = splitTune(abc);
+  if (k < 0) return abc;
+  const kv = lines[k].slice(2).replace(/%.*/, '');
+  const written = parseKey(kv);
+  if (!written) return abc;
+  let firstChord = null;
+  let lastNote = null;
+  for (let li = k + 1; li < lines.length; li++) {
+    if (!isMusic(lines[li])) continue;
+    if (/\[K:/.test(lines[li])) return abc; // key changes: leave alone
+    for (const t of tokenizeMusicLine(lines[li])) {
+      if (t.t === 'chord' && firstChord == null) {
+        const m = /^([A-G])([#b]?)(m(?!aj))?/.exec(t.text);
+        if (m) firstChord = { tonic: m[1] + (m[2] || ''), minor: !!m[3] };
+      }
+      if (t.t === 'note') lastNote = t;
+    }
+  }
+  if (!firstChord || !lastNote) return abc;
+  const target = parseKey(firstChord.tonic + (firstChord.minor ? 'm' : ''));
+  if (!target || target.fifths === written.fifths) return abc;
+  if (Math.abs(target.fifths - written.fifths) !== 1) return abc;
+  // Tonic of the written key already matches: nothing to fix.
+  if (pcOf(written.tonic) === pcOf(target.tonic)) return abc;
+  const accOf = (acc) => (acc.includes('^') ? acc.length : acc.includes('_') ? -acc.length : 0);
+  const notePc = (fifths) =>
+    (PC[lastNote.letter] + (lastNote.acc ? (lastNote.acc.includes('=') ? 0 : accOf(lastNote.acc)) : keyAccidental(fifths, lastNote.letter)) + 12) % 12;
+  if (notePc(target.fifths) !== pcOf(target.tonic)) return abc;
+  lines[k] = `K:${target.tonic}${target.minor ? 'm' : ''}`;
+  return lines.join('\n');
+}
+
+/** All deterministic fixes, in order. Returns the (possibly unchanged) ABC. */
+export function postProcess(abc) {
+  if (typeof abc !== 'string') return abc;
+  let out = abc;
+  for (const f of [fixOrphanRepeats, fixOctaveLeaps, fixKeyFromChords]) {
+    try {
+      out = f(out);
+    } catch (err) {
+      console.warn(`[read] post-process ${f.name} failed: ${err.message}`);
+    }
+  }
+  return out;
+}
