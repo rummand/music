@@ -391,8 +391,17 @@
     $("oct-down").disabled = o <= -2;
     $("oct-up").disabled = o >= 2;
   }
+  function setPickerOpen(open) {
+    $("instruments").classList.toggle("collapsed", !open);
+    $("instr-more").setAttribute("aria-expanded", String(open));
+    $("instr-more").textContent = open ? "Skjul listen" : "Skift instrument";
+  }
+  $("instr-more").addEventListener("click", function () {
+    setPickerOpen($("instruments").classList.contains("collapsed"));
+  });
   function chooseInstrument(id) {
     if (!S.song) return;
+    if (window.innerWidth < 700) setPickerOpen(false);
     S.song.instrument = id;
     prefs.instrument = id; savePrefs();
     afterTransposeChange();
@@ -452,7 +461,9 @@
           vocalfont: '"Helvetica" 13',
           annotationfont: '"Helvetica" 12',
           composerfont: '"Helvetica" 11 italic',
-          tempofont: '"Helvetica" 11'
+          tempofont: '"Helvetica" 11',
+          staffsep: 56,
+          vocalspace: 8
         }
       });
     } catch (e) {
