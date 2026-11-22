@@ -182,7 +182,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 0 16px 32px; }
 .song-side, .song-main { min-width: 0; }
 @media (min-width: 1000px) {
   .song-grid { grid-template-columns: 330px minmax(0, 1fr); }
-  .song-side { position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow: auto; }
+  .song-side { align-self: start; }
 }
 @media (max-width: 999px) {
   /* On small screens: instrument first, then notes, photo after the notes */
@@ -405,3 +405,10 @@ body.stand .stand-bar .btn:not(.btn-primary) { background: #fff; color: #222; bo
   .paper svg { width: 100% !important; height: auto !important; }
   .paper .abcjs-note.playing, .paper .abcjs-note.playing * { fill: #000 !important; stroke: #000 !important; }
 }
+
+/* octave / semitone box is a <details>: collapsed on phones, open on desktop */
+details.octave > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .4rem; }
+details.octave > summary::-webkit-details-marker { display: none; }
+details.octave > summary::after { content: "▾"; font-size: .9em; transition: transform .15s; }
+details.octave:not([open]) > summary::after { transform: rotate(-90deg); }
+details.octave .row { margin-top: 6px; }

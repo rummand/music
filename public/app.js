@@ -434,6 +434,7 @@
   });
   $("custom-minus").addEventListener("click", function () { if (!S.song) return; S.song.custom = clamp((S.song.custom || 0) - 1, -12, 12); prefs.custom = S.song.custom; afterTransposeChange(); });
   $("custom-plus").addEventListener("click", function () { if (!S.song) return; S.song.custom = clamp((S.song.custom || 0) + 1, -12, 12); prefs.custom = S.song.custom; afterTransposeChange(); });
+  try { if (window.matchMedia("(max-width: 999px)").matches) $("octave-box").open = false; } catch (e) { /* */ }
   $("oct-down").addEventListener("click", function () { if (!S.song) return; S.song.octave = clamp((S.song.octave || 0) - 1, -2, 2); afterTransposeChange(); });
   $("oct-up").addEventListener("click", function () { if (!S.song) return; S.song.octave = clamp((S.song.octave || 0) + 1, -2, 2); afterTransposeChange(); });
   $("semi-down").addEventListener("click", function () { if (!S.song) return; S.song.semi = clamp((S.song.semi || 0) - 1, -11, 11); afterTransposeChange(); });
@@ -710,7 +711,10 @@
       setPlayUi("loading");
       synth.warp = parseInt($("tempo").value, 10) || 100;
       // userAction = true: we are inside a click handler (needed on iOS)
-      p = synth.setTune(S.visualObj, true, { midiTranspose: 0, program: 0 }).then(function () {
+      p = synth.setTune(S.visualObj, true, { midiTranspose: 0, program: 0 }).then(function (res) {
+        if (res && res.status === "ok" && Array.isArray(res.notesLoaded) && res.notesLoaded.length === 0) {
+          throw new Error("no sounds loaded");
+        }
         synthDirty = false;
         synthLoading = false;
       });
@@ -960,7 +964,7 @@
     });
   }
   function fmtDate(ts) {
-    try { return new Date(ts).toLocaleDateString("da-DK", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; }
+    try { return new Date(ts).toLocaleString("da-DK", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; }
   }
   function normalize(t) { return String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
   function renderLibrary() {
@@ -980,7 +984,7 @@
         ? el("img", { "class": "lib-thumb", src: songUrl(s.id, "thumb.jpg"), alt: "", loading: "lazy", width: "56", height: "56" })
         : el("span", { "class": "lib-thumb lib-thumb-empty", "aria-hidden": "true" }, ["♪"]);
       var sub = fmtDate(s.created_at) + (v && v.instrument ? " · du spillede: " + instrumentById(v.instrument).name : "");
-      var open = el("a", { "class": "lib-open", href: "#/sang/" + encodeURIComponent(s.id) }, [
+      var open = el("a", { "class": "lib-open", href: "#/sang/" + encodeURIComponent(s.id), onclick: function (e) { if (this.getAttribute("href") === location.hash) { e.preventDefault(); route(); window.scrollTo({ top: 0 }); } } }, [
         thumb,
         el("span", { "class": "lib-meta" }, [
           el("span", { "class": "lib-title", text: s.title || "Uden titel" }),
@@ -1059,7 +1063,8 @@
       return;
     }
     var id = decodeURIComponent(m[1]);
-    if (S.song && S.song.id === id) return;
+    if (S.song && S.song.id === id && !$("song").hidden) return;
+    if (S.song && S.song.id === id) { show("song"); return; }
     var seq = ++routeSeq;
     $("paper").innerHTML = "";
     fetch(songUrl(id)).then(readJson).then(function (song) {
