@@ -238,13 +238,13 @@ main { max-width: 1280px; margin: 0 auto; padding: 0 16px 32px; }
   .song-main > #abc-errors { order: 2; }
   .song-main > #toolbar { order: 3; }
   #song { padding-bottom: 76px; }
-  .player {
+  #toolbar .player {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 8px; flex-wrap: nowrap;
     background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(0,0,0,.08);
     padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
   }
-  .btn-play { min-width: 0; padding: 0 16px; }
-  .tempo { min-width: 0; flex: 1 1 auto; }
+  #toolbar .btn-play { min-width: 0; padding: 0 16px; }
+  #toolbar .tempo { min-width: 0; flex: 1 1 auto; }
   .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
   .progressbar { margin-top: 0; }
   .audio-note { display: none; }
