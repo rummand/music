@@ -29,11 +29,11 @@ test('"|:" never closed by ":|" is removed; real repeats are kept', () => {
 test('leaps of more than an octave are folded back', () => {
   assert.equal(fixOctaveLeaps(`${H}K:F\nF2 G2 A2 F2 | c2 d2 c2 B,2 |\n`), `${H}K:F\nF2 G2 A2 F2 | c2 d2 c2 B2 |\n`);
   // a run written an octave too low is dragged up with the first wrong note
-  assert.equal(fixOctaveLeaps(`${H}K:C\nc2 d2 e2 G,2 A,2 B,2 | c8 |\n`), `${H}K:C\nc2 d2 e2 G2 A2 B2 | c8 |\n`);
+  assert.equal(fixOctaveLeaps(`${H}K:C\nc2 d2 c2 B,2 A,2 | G8 |\n`), `${H}K:C\nc2 d2 c2 B2 A2 | G8 |\n`);
   // a wrong first note of a line is moved toward the rest
   assert.equal(fixOctaveLeaps(`${H}K:C\nE,2 F2 G2 A2 | G8 |\n`), `${H}K:C\nE2 F2 G2 A2 | G8 |\n`);
   // an octave leap is fine
-  const ok = `${H}K:C\nC2 c2 C2 c2 | G,2 G2 E2 C2 |\n`;
+  const ok = `${H}K:C\nC2 c2 C2 c2 | G2 g2 G2 C2 |\n`;
   assert.equal(fixOctaveLeaps(ok), ok);
   // bass clef is left alone
   const bass = `${H}K:C clef=bass\nC,2 E2 C,2 E2 |\n`;
