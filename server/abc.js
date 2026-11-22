@@ -148,8 +148,10 @@ export function validateAbc(abc) {
       if ((noComment.match(/"/g) || []).length % 2 === 1) {
         errors.push(`Unbalanced quote (") in music line ${i + 1}: ${l.slice(0, 60)}. Chord symbols must be written like "Am".`);
       }
-      const opens = (noComment.replace(/"[^"]*"/g, '').match(/\[/g) || []).length;
-      const closes = (noComment.replace(/"[^"]*"/g, '').match(/\]/g) || []).length;
+      // Ignore chord-symbol text and bar tokens that use brackets: |] [| [1 :]
+      const bracketText = noComment.replace(/"[^"]*"/g, '').replace(/\[\||\|\]|\[(?=\d)|:\]/g, '');
+      const opens = (bracketText.match(/\[/g) || []).length;
+      const closes = (bracketText.match(/\]/g) || []).length;
       if (opens !== closes) {
         errors.push(`Unbalanced [ ] brackets in music line ${i + 1}: ${l.slice(0, 60)}.`);
       }

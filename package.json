@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "MUX_MOCK=1 node --watch server/index.js",
-    "test": "node --test test/"
+    "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "abcjs": "6.4.4",

@@ -12,8 +12,10 @@
 //   pitch    1 - editDistance/maxLen over the sequence of sounding pitches (MIDI)
 //   pitch+dur  same over (pitch, duration) pairs
 //   interval same over successive pitch intervals (forgives a wrong key/octave)
-//   lyrics   F1 word overlap of the w: lyrics (syllables joined, case/punct-insensitive)
-// Repeats are compared as written (not unfolded); ties are not merged.
+//   lyrics   F1 overlap of the distinct words in the w: lyrics (syllables joined,
+//            case/punctuation-insensitive)
+// Repeats (|: :|, ::, [1 [2) are unfolded on both sides before comparing, so a
+// tune written out in full matches one written with repeat signs. Ties are not merged.
 // Writes test/omr-eval-results.json.
 
 import fs from 'node:fs';
@@ -77,9 +79,21 @@ export function analyse(abc) {
     if (mf && mf.num) out.meter = `${mf.num}/${mf.den}`;
   } catch {}
 
-  // Walk the first voice of the first staff.
+  // Walk the first voice of the first staff, collecting measures with repeat info.
   let keyAcc = {}; // letter -> semitone offset from the key signature
   let barAcc = {}; // "letter+octave" -> offset from accidentals within the bar
+  const measures = [];
+  let cur = { notes: [], startRepeat: false, endRepeat: false, ending: null };
+  let ending = null;
+  const closeMeasure = (bar) => {
+    const left = /left_repeat|dbl_repeat/.test(bar.type);
+    const right = /right_repeat|dbl_repeat/.test(bar.type);
+    cur.endRepeat = right;
+    if (cur.notes.length || cur.startRepeat || right) measures.push(cur);
+    if (bar.endEnding) ending = null;
+    if (bar.startEnding) ending = parseInt(bar.startEnding, 10) || 1;
+    cur = { notes: [], startRepeat: left, endRepeat: false, ending };
+  };
   for (const line of tune.lines) {
     if (!line.staff) continue;
     const staff = line.staff[0];
@@ -91,16 +105,16 @@ export function analyse(abc) {
     for (const el of voice) {
       if (el.el_type === 'bar') {
         barAcc = {};
+        closeMeasure(el);
         continue;
       }
       if (el.el_type === 'key') {
         keyAcc = keyMap(el);
         continue;
       }
-      if (el.el_type !== 'note' || el.rest || !el.pitches || !el.pitches.length) {
-        if (el.el_type === 'note' && el.rest && el.rest.type !== 'spacer') {
-          out.notes.push({ midi: null, dur: round(el.duration) });
-        }
+      if (el.el_type !== 'note') continue;
+      if (el.rest || !el.pitches || !el.pitches.length) {
+        if (el.rest && el.rest.type !== 'spacer') cur.notes.push({ midi: null, dur: round(el.duration) });
         continue;
       }
       // Melody = top note of a chord.
@@ -111,7 +125,33 @@ export function analyse(abc) {
       const id = `${letter}${octave}`;
       if (p.accidental && p.accidental in ACC) barAcc[id] = ACC[p.accidental];
       const acc = id in barAcc ? barAcc[id] : keyAcc[letter] || 0;
-      out.notes.push({ midi: 60 + octave * 12 + LETTER_PC[step] + acc, dur: round(el.duration) });
+      cur.notes.push({ midi: 60 + octave * 12 + LETTER_PC[step] + acc, dur: round(el.duration) });
+    }
+  }
+  if (cur.notes.length) measures.push(cur);
+  out.writtenNotes = measures.flatMap((m) => m.notes);
+  out.notes = unfold(measures);
+  return out;
+}
+
+/** Play repeats (|: :|, ::, first/second endings) so written and unfolded forms compare equal. */
+function unfold(measures) {
+  const out = [];
+  const done = new Set();
+  let start = 0;
+  let second = false;
+  let guard = 0;
+  for (let i = 0; i < measures.length && guard++ < 10000; i++) {
+    const m = measures[i];
+    if (m.startRepeat && !(second && i === start)) {
+      start = i;
+      second = false;
+    }
+    if (!(second && m.ending === 1)) out.push(...m.notes);
+    if (m.endRepeat && !done.has(i) && !(second && m.ending === 1)) {
+      done.add(i);
+      second = true;
+      i = start - 1;
     }
   }
   return out;
@@ -173,7 +213,9 @@ export function similarity(a, b, eq) {
   return Math.round((1 - editDistance(a, b, eq) / max) * 1000) / 10;
 }
 
-function f1(truth, got) {
+function f1(truthWords, gotWords) {
+  const truth = [...new Set(truthWords)];
+  const got = [...new Set(gotWords)];
   if (!truth.length && !got.length) return 100;
   if (!truth.length || !got.length) return 0;
   const count = new Map();

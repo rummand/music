@@ -1,0 +1,257 @@
+{
+  "date": "2026-11-22T17:11:17.154Z",
+  "url": "http://localhost:3917",
+  "mock": true,
+  "summary": {
+    "n": 8,
+    "ok": 8,
+    "key": 25,
+    "meter": 50,
+    "pitch": 39.1,
+    "pitchDur": 31.25,
+    "interval": 43.6,
+    "lyrics": 17.5
+  },
+  "rows": [
+    {
+      "fixture": "glade-jul",
+      "variant": "png",
+      "file": "glade-jul.png",
+      "status": 200,
+      "ms": 94,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 0,
+        "meter": 0,
+        "pitch": 36.2,
+        "pitchDur": 12.8,
+        "interval": 23.9,
+        "lyrics": 0,
+        "detail": {
+          "truthKey": "Bb",
+          "gotKey": "F",
+          "truthMeter": "3/4",
+          "gotMeter": "4/4",
+          "truthNotes": 47,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    },
+    {
+      "fixture": "glade-jul",
+      "variant": "photo",
+      "file": "glade-jul.photo.jpg",
+      "status": 200,
+      "ms": 62,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 0,
+        "meter": 0,
+        "pitch": 36.2,
+        "pitchDur": 12.8,
+        "interval": 23.9,
+        "lyrics": 0,
+        "detail": {
+          "truthKey": "Bb",
+          "gotKey": "F",
+          "truthMeter": "3/4",
+          "gotMeter": "4/4",
+          "truthNotes": 47,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    },
+    {
+      "fixture": "hjulene-paa-bussen",
+      "variant": "png",
+      "file": "hjulene-paa-bussen.png",
+      "status": 200,
+      "ms": 64,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 0,
+        "meter": 100,
+        "pitch": 13.9,
+        "pitchDur": 8.3,
+        "interval": 14.3,
+        "lyrics": 0,
+        "detail": {
+          "truthKey": "G",
+          "gotKey": "F",
+          "truthMeter": "4/4",
+          "gotMeter": "4/4",
+          "truthNotes": 36,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    },
+    {
+      "fixture": "hjulene-paa-bussen",
+      "variant": "photo",
+      "file": "hjulene-paa-bussen.photo.jpg",
+      "status": 200,
+      "ms": 65,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 0,
+        "meter": 100,
+        "pitch": 13.9,
+        "pitchDur": 8.3,
+        "interval": 14.3,
+        "lyrics": 0,
+        "detail": {
+          "truthKey": "G",
+          "gotKey": "F",
+          "truthMeter": "4/4",
+          "gotMeter": "4/4",
+          "truthNotes": 36,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    },
+    {
+      "fixture": "lille-peter-edderkop",
+      "variant": "png",
+      "file": "lille-peter-edderkop.png",
+      "status": 200,
+      "ms": 86,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 0,
+        "meter": 0,
+        "pitch": 6.3,
+        "pitchDur": 3.9,
+        "interval": 36.2,
+        "lyrics": 0,
+        "detail": {
+          "truthKey": "D",
+          "gotKey": "F",
+          "truthMeter": "6/8",
+          "gotMeter": "4/4",
+          "truthNotes": 51,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    },
+    {
+      "fixture": "lille-peter-edderkop",
+      "variant": "photo",
+      "file": "lille-peter-edderkop.photo.jpg",
+      "status": 200,
+      "ms": 83,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 0,
+        "meter": 0,
+        "pitch": 6.3,
+        "pitchDur": 3.9,
+        "interval": 36.2,
+        "lyrics": 0,
+        "detail": {
+          "truthKey": "D",
+          "gotKey": "F",
+          "truthMeter": "6/8",
+          "gotMeter": "4/4",
+          "truthNotes": 51,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    },
+    {
+      "fixture": "mester-jakob",
+      "variant": "png",
+      "file": "mester-jakob.png",
+      "status": 200,
+      "ms": 57,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 100,
+        "meter": 100,
+        "pitch": 100,
+        "pitchDur": 100,
+        "interval": 100,
+        "lyrics": 70,
+        "detail": {
+          "truthKey": "F",
+          "gotKey": "F",
+          "truthMeter": "4/4",
+          "gotMeter": "4/4",
+          "truthNotes": 32,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    },
+    {
+      "fixture": "mester-jakob",
+      "variant": "photo",
+      "file": "mester-jakob.photo.jpg",
+      "status": 200,
+      "ms": 58,
+      "error": null,
+      "title": "Mester Jakob",
+      "warnings": [
+        "Demo-tilstand: Serveren er ikke forbundet til AI-modellen, så du ser et fast eksempel (\"Mester Jakob\") i stedet for dit billede."
+      ],
+      "scores": {
+        "key": 100,
+        "meter": 100,
+        "pitch": 100,
+        "pitchDur": 100,
+        "interval": 100,
+        "lyrics": 70,
+        "detail": {
+          "truthKey": "F",
+          "gotKey": "F",
+          "truthMeter": "4/4",
+          "gotMeter": "4/4",
+          "truthNotes": 32,
+          "gotNotes": 32,
+          "parseError": null
+        }
+      },
+      "abc": "X:1\nT:Mester Jakob\nC:Traditionel\nM:4/4\nL:1/8\nQ:1/4=100\nK:F\n\"F\"F2 G2 A2 F2 | F2 G2 A2 F2 | A2 B2 c4 | A2 B2 c4 |\nw:Mes-ter Ja-kob, mes-ter Ja-kob, so-ver du? So-ver du?\n\"F\"cd cB A2 F2 | cd cB A2 F2 | F2 \"C\"C2 \"F\"F4 | F2 \"C\"C2 \"F\"F4 |]\nw:Hø-rer du ej klok-ken? Hø-rer du ej klok-ken? Bim, bam, bum. Bim, bam, bum.\n"
+    }
+  ]
+}
