@@ -13,12 +13,12 @@ export const OMR_INSTRUCTIONS = `Transcribe the music in this picture to ABC not
 2. Read the clef, the KEY SIGNATURE and the TIME SIGNATURE at the start of the first staff. Count the sharps or flats one by one.
 3. Count the systems (staff lines) and the bars in each system.
 4. Go through the music bar by bar, note by note, from left to right. For each note read its pitch (line or space, plus any accidental) and its duration (filled or hollow notehead, stem, flags/beams, dots).
-5. After writing each bar, COUNT THE BEATS: the notes and rests of every bar must add up exactly to the time signature (e.g. 3/4 = three quarter notes). Only the first bar (pickup/anacrusis) and the last bar may be shorter, and together they make one full bar. If a bar does not add up, look at the picture again and fix the durations.
+5. After writing each bar, COUNT THE BEATS: the notes and rests of every bar must add up exactly to the time signature (e.g. 3/4 = three quarter notes). Only the first bar (pickup/anacrusis) may be shorter, and sometimes the last bar. If a bar does not add up, look at the picture again and fix the durations. Never shorten or drop a printed note just to make bars add up: songs very often END WITH A LONG NOTE (half, dotted half or whole note) that fills the whole last bar, so write it at its full printed length.
 6. Write the chord symbols that are printed above the staff, at the note they stand over.
 7. Write the lyrics of the FIRST verse only, syllable by syllable, under the notes they belong to.
 
 ## Output format
-First write a SHORT analysis (at most 8 lines, plain text): title, clef, key signature (number of sharps/flats and the resulting key), time signature, pickup yes/no, number of systems and bars.
+First write a SHORT analysis (at most 8 lines, plain text): title, clef, key signature (number of sharps/flats and the resulting key), time signature, pickup yes/no, repeat signs yes/no, number of systems and bars per system.
 Then write the ABC inside ONE fenced code block that starts with \`\`\`abc and ends with \`\`\`. Write nothing after the code block.
 
 ## The ABC header (in this order, one field per line)
@@ -38,19 +38,41 @@ Count the accidentals in the key signature, then decide major or minor from the 
 - 3♯: K:A or K:F#m        - 3♭: K:Eb or K:Cm
 - 4♯: K:E or K:C#m        - 4♭: K:Ab or K:Fm
 - 5♯: K:B or K:G#m        - 5♭: K:Db or K:Bbm
+Check your count against the chord symbols and the melody: the FIRST and LAST chord are usually the key chord, and the melody usually ends on the key note. If you counted 1 flat but the first chord is Bb and the song ends on B♭, look again: there are 2 flats (K:Bb). Same for sharps (1 sharp but chords D...D and ending on D -> 2 sharps, K:D).
 Old church-mode melodies may be modal (e.g. K:D dorian); use that only when clearly appropriate, otherwise use major/minor.
 If the clef is a bass clef, write K:<key> clef=bass and keep the real pitches.
 
 ## Pitches (treble clef)
 ABC letter case and marks give the octave: C = middle C, c = one octave higher, c' = two octaves higher, C, = one octave lower.
-- Treble staff LINES from bottom to top: E G B d f
-- Treble staff SPACES from bottom to top: F A c e
-- Below the staff: D (just below the bottom line), C (first ledger line below = middle C), B, (below that), A, (second ledger line below)
-- Above the staff: g (just above the top line), a (first ledger line above), b, c' (second ledger line above)
+Each step up the staff (line -> space -> line) is the next letter. Treble clef, from high to low:
+  c'  second ledger line above the staff
+  b   space above the first ledger line
+  a   first ledger line above the staff
+  g   space just above the top line
+  f   5th line (top line)
+  e   4th space
+  d   4th line
+  c   3rd space
+  B   3rd line (middle line)
+  A   2nd space
+  G   2nd line (the line the treble clef curls around)
+  F   1st space
+  E   1st line (bottom line)
+  D   space just below the bottom line
+  C   first ledger line below the staff (middle C)
+  B,  just below that ledger line
+  A,  second ledger line below
+So UPPERCASE D E F G are the LOW notes at the bottom of the staff, and lowercase d e f g are the HIGH notes at the top. A letter with a comma (B, A, G,) hangs BELOW the ledger line under the staff; such notes are rare in songs, so only write one when you clearly see a ledger line above the notehead. Within a melody, neighbouring notes are almost always less than an octave apart; if your ABC jumps more than an octave, you have the octave wrong.
 Bass clef lines bottom to top: G, B, D F A ; spaces: A, C E G.
 Accidentals go BEFORE the note: ^ sharp, _ flat, = natural (e.g. ^F, _B, =c). Do NOT write accidentals that are already in the key signature; write only those printed in the music. As in printed music, an accidental lasts until the end of its bar.
 
 ## Durations (with L:1/8)
+The length of a note comes ONLY from how it is drawn, never from how much space it has on the page (in a wide layout a quarter note can stand far from the next note):
+- filled notehead with a stem, no flag or beam = quarter (2)
+- filled notehead with a flag, or joined to its neighbours by a beam = eighth (1); two beams = sixteenth (1/2)
+- HOLLOW (open, white) notehead with a stem = half (4)
+- hollow notehead without a stem = whole (8)
+- a dot after the notehead makes it half as long again (quarter. = 3, half. = 6)
 - eighth note: A   (one eighth = the unit)
 - quarter note: A2
 - dotted quarter: A3
@@ -66,6 +88,7 @@ Write beamed notes together without spaces (e.g. AB c2 for two beamed eighths th
 ## Bars, repeats and other symbols
 - bar line |   double bar ||   final bar |]
 - repeat start |:   repeat end :|   both ::
+Write |: :| :: ONLY where the printed bar line has two DOTS next to it. Most songs have no repeat signs at all: then do not write any, and do not start lines with |:. A thick+thin bar line with dots on BOTH sides (end of one repeat, start of the next) is ::.
 - first and second endings ("volta" brackets 1. and 2.): |1 ... :|2 ...
 - a tie (curved line joining two notes of the SAME pitch): put - right after the first note, e.g. A4- A2
 - a slur over different pitches: (AB)
@@ -112,6 +135,32 @@ export function omrRetryMessage(errors) {
 ${errors.map((e) => `- ${e}`).join('\n')}
 
 Look at the picture again and write the complete, corrected transcription. Follow the rules above, and put the ABC inside one \`\`\`abc fenced code block with the header X:, T:, M:, L:, K: (K: last) followed by the music and w: lyric lines.`;
+}
+
+/**
+ * Second look: the model's own transcription, plus a plain-language reading
+ * aid saying where each written note sits on the staff and how it looks, so
+ * octave and duration mistakes stand out when compared with the picture.
+ */
+export function omrVerifyMessage(abc, readingAid) {
+  return `Below is a transcription of this picture into ABC notation that may contain mistakes. Check it against the picture and correct it.
+
+\`\`\`abc
+${abc.trim()}
+\`\`\`
+
+What this ABC means on a treble staff, bar by bar (position of each notehead, and how it must look):
+${readingAid}
+
+Compare with the picture, one item at a time:
+1. KEY SIGNATURE: count the sharps/flats right after the clef again. Does K: match? (The first and last chords and the last melody note usually name the key.)
+2. TIME SIGNATURE and PICKUP: does M: match, and does the first bar have the right number of notes?
+3. BARS: does every system have the same number of bars as printed? Is any bar missing or repeated?
+4. PITCH: for each note, is the notehead really on that line/space (count the lines!)? Watch for octave mistakes: notes at the bottom of the staff are UPPERCASE (D E F G), notes at the top are lowercase (d e f g).
+5. LENGTH: is each notehead really filled/hollow, with/without beam or flag, dotted or not? The last note of a song is often long.
+6. REPEATS: are |: :| written only where the bar line has two dots?
+
+Change only what is wrong; keep chord symbols and lyrics. Then write a list of the corrections (at most 6 short lines, or "No corrections"), followed by the complete corrected ABC in ONE \`\`\`abc fenced code block. Write nothing after the code block.`;
 }
 
 export const EDIT_SYSTEM = `You help people with songs written in ABC notation (standard 2.1). The user is Danish and writes in Danish.
